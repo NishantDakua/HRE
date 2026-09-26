@@ -37,14 +37,14 @@ export default function DashboardSidebar({ mode }: DashboardSidebarProps) {
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + '/');
 
   return (
-    <aside className="hidden md:flex w-64 bg-gradient-to-b from-slate-900 to-slate-800 text-white flex-col border-r border-slate-700">
+    <aside className="hidden md:flex w-72 bg-gradient-to-b from-slate-900 to-slate-800 text-white flex-col border-r border-slate-700">
       {/* Logo */}
       <div className="flex items-center gap-3 px-6 py-6 border-b border-slate-700">
         <Logo inverted={true} />
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-1">
+      <nav className="flex-1 overflow-y-auto px-4 py-6 space-y-1 scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         {navItems.map((item) => {
           const Icon = item.icon;
           const active = isActive(item.path);
