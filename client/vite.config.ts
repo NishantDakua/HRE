@@ -27,6 +27,7 @@ export default defineConfig({
     port: 3100,
     proxy: {
       "/api": { target: "http://localhost:5000", changeOrigin: true },
+      "/voice": { target: "http://localhost:8008", changeOrigin: true },
     },
   },
 });

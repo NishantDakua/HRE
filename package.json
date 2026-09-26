@@ -8,6 +8,7 @@
     "dev": "pnpm --parallel --filter hre-client --filter hre-server dev",
     "dev:client": "pnpm --filter hre-client dev",
     "dev:server": "pnpm --filter hre-server dev",
+    "dev:ai": "cd ai && python -m uvicorn app:app --host 127.0.0.1 --port 8008",
     "build": "pnpm --filter hre-client build && pnpm --filter hre-server build",
     "build:client": "pnpm --filter hre-client build",
     "build:server": "pnpm --filter hre-server build",

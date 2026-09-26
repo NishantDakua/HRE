@@ -15,6 +15,11 @@ export function setAuthTokenGetter(fn: TokenGetter | null) {
   getToken = fn;
 }
 
+export async function authHeader(): Promise<Record<string, string>> {
+  const token = getToken ? await getToken() : null;
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 api.interceptors.request.use(async (config) => {
   const token = getToken ? await getToken() : null;
   if (token) config.headers.set("Authorization", `Bearer ${token}`);

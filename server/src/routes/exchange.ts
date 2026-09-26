@@ -31,7 +31,7 @@ const AREA_ANCHOR: Record<(typeof AREAS)[number], string> = {
   Vashi: 'b06',
 };
 
-async function actorBusiness(req: Request) {
+export async function actorBusiness(req: Request) {
   const { userId } = getAuth(req);
   if (!userId) return null;
   const linked = await prisma.exchangeBusiness.findUnique({ where: { clerkUserId: userId } });

@@ -1,23 +1,51 @@
+# Dependencies
 node_modules/
+.venv/
+__pycache__/
+*.egg-info/
+
+# Build outputs
 dist/
+build/
+.turbo/
+out/
+.next/
+
+# Environment & secrets (but keep examples)
 .env
-.env.example
 .env.local
 .env.*.local
+server/.env
+ai/.env
+
+# Logs & temp files
 *.log
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Editor & OS
 .DS_Store
 .vscode/
 .idea/
 *.swp
 *.swo
-.turbo/
+
+# Testing
 coverage/
-build/
+test-results/
+playwright-report/
+
+# TypeScript
 *.tsbuildinfo
+
+# Database
 prisma/dev.db
 prisma/dev.db-shm
 prisma/dev.db-wal
-.next/
 server/uploads/
-test-results/
-playwright-report/
+
+# Screenshots (temp test files)
+screenshots/*.png

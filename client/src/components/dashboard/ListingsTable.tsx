@@ -79,74 +79,132 @@ export function ListingsTable({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r
           </Button>
         </div>
       ) : (
-        <div className="surface overflow-x-auto" data-lenis-prevent>
-          <table className="w-full min-w-[860px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-[11px] uppercase tracking-[0.1em] text-muted">
-                <th scope="col" className="px-4 py-3 font-medium">Listing</th>
-                <th scope="col" className="px-3 py-3 font-medium">Price</th>
-                <th scope="col" className="px-3 py-3 font-medium">Stock</th>
-                <th scope="col" className="px-3 py-3 font-medium">Utilization</th>
-                <th scope="col" className="px-3 py-3 font-medium">Next 14 days</th>
-                <th scope="col" className="px-3 py-3 font-medium">Status</th>
-                <th scope="col" className="px-4 py-3">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((r) => {
-                const Icon = CATEGORY_ICON[r.category];
-                return (
-                  <tr key={r.id} className={cn("border-b border-border last:border-0", r.status === "PAUSED" && "opacity-60")}>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-3">
-                        <span className="grid size-9 shrink-0 place-items-center rounded-md bg-sand">
-                          <Icon className="size-4 text-ink/70" strokeWidth={1.5} />
-                        </span>
-                        <div className="min-w-0">
-                          <Link to={`/resource/${r.id}`} className="inline-flex items-center gap-1 font-medium text-text hover:underline">
-                            {r.title} <ArrowUpRight className="size-3 text-muted" />
-                          </Link>
-                          {r.pendingRequests > 0 && (
-                            <span className="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">
-                              {r.pendingRequests} pending
-                            </span>
-                          )}
-                        </div>
+        <>
+          {/* Mobile card view */}
+          <div className="space-y-3 md:hidden">
+            {data.map((r) => {
+              const Icon = CATEGORY_ICON[r.category];
+              return (
+                <div key={r.id} className={cn("surface space-y-3 p-4", r.status === "PAUSED" && "opacity-60")}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <span className="grid size-9 shrink-0 place-items-center rounded-md bg-sand">
+                        <Icon className="size-4 text-ink/70" strokeWidth={1.5} />
+                      </span>
+                      <div className="min-w-0">
+                        <Link to={`/resource/${r.id}`} className="inline-flex items-center gap-1 font-medium text-text hover:underline text-sm">
+                          {r.title} <ArrowUpRight className="size-3 text-muted" />
+                        </Link>
+                        {r.pendingRequests > 0 && (
+                          <span className="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">
+                            {r.pendingRequests} pending
+                          </span>
+                        )}
                       </div>
-                    </td>
-                    <td className="px-3 py-3">
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => onEdit(r)} aria-label={`Edit ${r.title}`}>
+                      <Pencil />
+                    </Button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <p className="text-muted mb-1">Price</p>
                       <PriceTag amount={r.price} unit={r.unit} size="sm" />
-                    </td>
-                    <td className="px-3 py-3 font-mono text-xs tabular-nums text-text">
-                      {formatINR(r.available)}/{formatINR(r.quantity)} <span className="text-muted">{r.unitLabel}</span>
-                    </td>
-                    <td className="px-3 py-3">
+                    </div>
+                    <div>
+                      <p className="text-muted mb-1">Stock</p>
+                      <p className="font-mono tabular-nums text-text">
+                        {formatINR(r.available)}/{formatINR(r.quantity)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-muted mb-1">Utilization</p>
                       <UtilisationBar value={r.utilisation} />
-                    </td>
-                    <td className="px-3 py-3">
-                      <ListingStrip resourceId={r.id} />
-                    </td>
-                    <td className="px-3 py-3">
+                    </div>
+                    <div>
+                      <p className="text-muted mb-1">Status</p>
                       <StatusToggle resource={r} />
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <Button size="sm" variant="ghost" onClick={() => onEdit(r)} aria-label={`Edit ${r.title}`}>
-                        <Pencil /> Edit
-                      </Button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-          <p className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-4 py-2.5 text-[11px] text-muted">
-            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-2 rounded-[2px] bg-available/25" /> free</span>
-            <span className="inline-flex items-center gap-1.5"><span className="h-3 w-2 rounded-[2px] bg-marigold/50" /> partly booked</span>
-            <span className="inline-flex items-center gap-1.5"><span className="conflict-stripes h-3 w-2 rounded-[2px] bg-conflict/25" /> fully booked</span>
-          </p>
-        </div>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="text-[11px] text-muted mb-2">Next 14 days</p>
+                    <ListingStrip resourceId={r.id} />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Desktop table view */}
+          <div className="hidden md:block surface overflow-x-auto" data-lenis-prevent>
+            <table className="w-full min-w-[860px] text-sm">
+              <thead>
+                <tr className="border-b border-border text-left text-[11px] uppercase tracking-[0.1em] text-muted">
+                  <th scope="col" className="px-4 py-3 font-medium">Listing</th>
+                  <th scope="col" className="px-3 py-3 font-medium">Price</th>
+                  <th scope="col" className="px-3 py-3 font-medium">Stock</th>
+                  <th scope="col" className="px-3 py-3 font-medium">Utilization</th>
+                  <th scope="col" className="px-3 py-3 font-medium">Next 14 days</th>
+                  <th scope="col" className="px-3 py-3 font-medium">Status</th>
+                  <th scope="col" className="px-4 py-3">
+                    <span className="sr-only">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((r) => {
+                  const Icon = CATEGORY_ICON[r.category];
+                  return (
+                    <tr key={r.id} className={cn("border-b border-border last:border-0", r.status === "PAUSED" && "opacity-60")}>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-3">
+                          <span className="grid size-9 shrink-0 place-items-center rounded-md bg-sand">
+                            <Icon className="size-4 text-ink/70" strokeWidth={1.5} />
+                          </span>
+                          <div className="min-w-0">
+                            <Link to={`/resource/${r.id}`} className="inline-flex items-center gap-1 font-medium text-text hover:underline">
+                              {r.title} <ArrowUpRight className="size-3 text-muted" />
+                            </Link>
+                            {r.pendingRequests > 0 && (
+                              <span className="ml-2 rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">
+                                {r.pendingRequests} pending
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-3">
+                        <PriceTag amount={r.price} unit={r.unit} size="sm" />
+                      </td>
+                      <td className="px-3 py-3 font-mono text-xs tabular-nums text-text">
+                        {formatINR(r.available)}/{formatINR(r.quantity)} <span className="text-muted">{r.unitLabel}</span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <UtilisationBar value={r.utilisation} />
+                      </td>
+                      <td className="px-3 py-3">
+                        <ListingStrip resourceId={r.id} />
+                      </td>
+                      <td className="px-3 py-3">
+                        <StatusToggle resource={r} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <Button size="sm" variant="ghost" onClick={() => onEdit(r)} aria-label={`Edit ${r.title}`}>
+                          <Pencil /> Edit
+                        </Button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-border px-4 py-2.5 text-[11px] text-muted">
+              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-2 rounded-[2px] bg-available/25" /> free</span>
+              <span className="inline-flex items-center gap-1.5"><span className="h-3 w-2 rounded-[2px] bg-marigold/50" /> partly booked</span>
+              <span className="inline-flex items-center gap-1.5"><span className="conflict-stripes h-3 w-2 rounded-[2px] bg-conflict/25" /> fully booked</span>
+            </p>
+          </div>
+        </>
       )}
     </section>
   );
