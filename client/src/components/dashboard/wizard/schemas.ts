@@ -3,6 +3,7 @@ import { z } from "zod";
 import { isLocal, isoToLocal, parseLocal } from "@/lib/datetime";
 import {
   CANCELLATION_POLICIES,
+  LISTING_PHOTO_POSITIONS,
   PRICE_UNITS,
   RESOURCE_CATEGORIES,
   type CreateResourceInput,
@@ -78,8 +79,21 @@ export const conditionsSchema = z.object({
 });
 export type ConditionsValues = z.infer<typeof conditionsSchema>;
 
+export const photosSchema = z.object({
+  photos: z
+    .array(
+      z.object({
+        position: z.enum(LISTING_PHOTO_POSITIONS),
+        dataUrl: z.string().min(20, "Take this photo"),
+      })
+    )
+    .length(3, "Three photos, one from each position"),
+});
+export type PhotosValues = z.infer<typeof photosSchema>;
+
 export interface WizardDraft {
   details?: DetailsValues;
+  photos?: PhotosValues["photos"];
   pricing?: PricingValues;
   availability?: AvailabilityValues;
   conditions?: ConditionsValues;
@@ -117,10 +131,12 @@ export function draftToInput(d: Required<WizardDraft>): CreateResourceInput {
     conditions: d.conditions.conditions.map((c) => c.text),
     cancellation: d.conditions.cancellation,
     deposit: d.conditions.deposit,
+    photos: d.photos,
   };
 }
 
 export function resourceToDraft(r: MyResource): Required<WizardDraft> {
+  const byPosition = new Map((r.photos ?? []).map((photo) => [photo.position, photo.url]));
   return {
     details: {
       title: r.title,
@@ -131,6 +147,7 @@ export function resourceToDraft(r: MyResource): Required<WizardDraft> {
       capacity: r.capacity,
       tags: r.tags.join(", "),
     },
+    photos: LISTING_PHOTO_POSITIONS.map((position) => ({ position, dataUrl: byPosition.get(position) ?? "" })),
     pricing: {
       price: r.price,
       unit: r.unit,

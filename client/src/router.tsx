@@ -3,7 +3,9 @@ import { ProtectedRoute } from "@/components/auth";
 import { AppShell } from "@/layouts/AppShell";
 import { RootLayout } from "@/layouts/RootLayout";
 import AnalyticsPage from "@/pages/Analytics";
+import ContractPage from "@/pages/Contract";
 import DashboardPage from "@/pages/Dashboard";
+import HandoverPage from "@/pages/Handover";
 import DiscoverPage from "@/pages/Discover";
 import LandingPage from "@/pages/Landing";
 import NotFoundPage from "@/pages/NotFound";
@@ -29,6 +31,8 @@ export const router = createBrowserRouter([
               { path: "dashboard", element: <DashboardPage /> },
               { path: "requests", element: <RequestsPage /> },
               { path: "analytics", element: <AnalyticsPage /> },
+              { path: "contract/:id", element: <ContractPage /> },
+              { path: "handover/:id", element: <HandoverPage /> },
             ],
           },
           { path: "*", element: <NotFoundPage /> },

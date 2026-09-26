@@ -212,3 +212,195 @@ export function buildAnalyticsReport(from: string, to: string) {
     })),
   };
 }
+
+const LIVE_AREAS = ['Andheri', 'Bandra', 'Powai', 'Lower Parel', 'Juhu', 'Vashi'] as const;
+const DEAL_STATUSES = new Set(['ACCEPTED', 'CONFIRMED', 'IN_USE', 'COMPLETED']);
+const DEAD_STATUSES = new Set(['CANCELLED', 'REJECTED']);
+const IN_FLIGHT = new Set(['PENDING', 'COUNTERED', 'ACCEPTED', 'CONFIRMED', 'IN_USE']);
+
+export interface LiveDeal {
+  createdAt: Date;
+  startAt: Date;
+  status: string;
+  seekerId: string;
+  seekerArea: string;
+  total: number;
+  offers: { fromBusinessId: string; status: string }[];
+  items: { providerId: string; category: string; agreedPrice: number; quantity: number; area: string }[];
+}
+
+function involves(deal: LiveDeal, businessId: string) {
+  return deal.seekerId === businessId || deal.items.some((item) => item.providerId === businessId);
+}
+
+function lineValue(deal: LiveDeal, businessId: string) {
+  return deal.items
+    .filter((item) => item.providerId === businessId)
+    .reduce((sum, item) => sum + item.agreedPrice * item.quantity, 0);
+}
+
+function onDay(deal: LiveDeal, start: Date, end: Date) {
+  const key = ymd(deal.createdAt);
+  return key >= ymd(start) && key <= ymd(end);
+}
+
+function totalsFor(deals: LiveDeal[], businessId: string, listings: { quantity: number; available: number }[]) {
+  const involved = deals.filter((deal) => involves(deal, businessId) && !DEAD_STATUSES.has(deal.status));
+  const accepted = involved.filter((deal) => DEAL_STATUSES.has(deal.status));
+  const utilisation = listings.length
+    ? listings.reduce((sum, listing) => sum + (listing.quantity ? (listing.quantity - listing.available) / listing.quantity : 0), 0) / listings.length
+    : 0;
+  return {
+    earned: accepted.reduce((sum, deal) => sum + lineValue(deal, businessId), 0),
+    spent: involved.filter((deal) => deal.seekerId === businessId).reduce((sum, deal) => sum + deal.total, 0),
+    bookings: accepted.length,
+    requests: involved.length,
+    acceptanceRate: involved.length ? accepted.length / involved.length : 0,
+    utilisation,
+  };
+}
+
+export function buildLiveReport(
+  from: string,
+  to: string,
+  businessId: string,
+  deals: LiveDeal[],
+  listings: { category: string; quantity: number; available: number }[]
+) {
+  const start = parseDay(from);
+  const end = parseDay(to);
+  const days = eachDay(start, end);
+  const length = Math.max(days.length, 1);
+  const current = deals.filter((deal) => onDay(deal, start, end));
+  const previous = deals.filter((deal) => onDay(deal, addDays(start, -length), addDays(start, -1)));
+  const bucket = length > 45 ? 'week' : 'day';
+  const bucketKey = (day: Date) => ymd(bucket === 'week' ? startOfWeek(day) : day);
+
+  const series = new Map<string, { earned: number; spent: number; bookings: number; accepted: number; total: number }>();
+  for (const day of days) series.set(bucketKey(day), { earned: 0, spent: 0, bookings: 0, accepted: 0, total: 0 });
+  for (const deal of current) {
+    if (!involves(deal, businessId) || DEAD_STATUSES.has(deal.status)) continue;
+    const row = series.get(bucketKey(deal.createdAt));
+    if (!row) continue;
+    row.total += 1;
+    if (deal.seekerId === businessId) row.spent += deal.total;
+    if (!DEAL_STATUSES.has(deal.status)) continue;
+    row.accepted += 1;
+    row.bookings += 1;
+    row.earned += lineValue(deal, businessId);
+  }
+
+  const byCategory = new Map<string, { revenue: number; bookings: number }>();
+  for (const deal of current) {
+    if (!involves(deal, businessId) || !DEAL_STATUSES.has(deal.status)) continue;
+    for (const item of deal.items) {
+      const row = byCategory.get(item.category) ?? { revenue: 0, bookings: 0 };
+      row.revenue += item.agreedPrice * item.quantity;
+      row.bookings += 1;
+      byCategory.set(item.category, row);
+    }
+  }
+
+  const utilisation = new Map<string, { used: number; quantity: number }>();
+  for (const listing of listings) {
+    const row = utilisation.get(listing.category) ?? { used: 0, quantity: 0 };
+    row.used += Math.max(0, listing.quantity - listing.available);
+    row.quantity += listing.quantity;
+    utilisation.set(listing.category, row);
+  }
+
+  const heat = new Map<string, number>();
+  for (const deal of current) {
+    if (!involves(deal, businessId) || DEAD_STATUSES.has(deal.status)) continue;
+    const area = deal.seekerId === businessId ? deal.items[0]?.area : deal.seekerArea;
+    if (!area) continue;
+    const key = `${area}|${isoWeekday(deal.startAt) - 1}`;
+    heat.set(key, (heat.get(key) ?? 0) + 1);
+  }
+
+  return {
+    from,
+    to,
+    bucket,
+    totals: totalsFor(current, businessId, listings),
+    previous: totalsFor(previous, businessId, listings),
+    series: [...series].map(([date, value]) => ({
+      date,
+      earned: value.earned,
+      spent: value.spent,
+      bookings: value.bookings,
+    })),
+    utilisationByCategory: [...utilisation].map(([category, value]) => ({
+      category,
+      utilisation: value.quantity ? Math.min(1, value.used / value.quantity) : 0,
+    })),
+    heatmap: LIVE_AREAS.flatMap((area) =>
+      Array.from({ length: 7 }, (_, weekday) => ({
+        area,
+        weekday,
+        requests: heat.get(`${area}|${weekday}`) ?? 0,
+      }))
+    ),
+    topCategories: [...byCategory]
+      .map(([category, value]) => ({ category, revenue: value.revenue, bookings: value.bookings }))
+      .sort((a, b) => b.revenue - a.revenue),
+    acceptance: [...series].map(([date, value]) => ({
+      date,
+      accepted: value.accepted,
+      total: value.total,
+      rate: value.total ? value.accepted / value.total : 0,
+    })),
+  };
+}
+
+export function liveSummary(
+  range: string,
+  businessId: string,
+  deals: LiveDeal[],
+  listings: { category: string; quantity: number; available: number }[],
+  avgResponseMins: number
+) {
+  const days = range === '7d' ? 7 : range === '90d' ? 90 : 30;
+  const end = new Date();
+  end.setHours(0, 0, 0, 0);
+  const start = addDays(end, -(days - 1));
+  const inRange = deals.filter((deal) => onDay(deal, start, end));
+  const totals = totalsFor(inRange, businessId, listings);
+  const byCategory = new Map<string, { bookings: number; revenue: number }>();
+  for (const deal of inRange) {
+    if (!involves(deal, businessId) || DEAD_STATUSES.has(deal.status)) continue;
+    for (const item of deal.items) {
+      const row = byCategory.get(item.category) ?? { bookings: 0, revenue: 0 };
+      row.bookings += 1;
+      row.revenue += item.agreedPrice * item.quantity;
+      byCategory.set(item.category, row);
+    }
+  }
+  const mine = deals.filter((deal) => involves(deal, businessId));
+  return {
+    range,
+    earned: totals.earned,
+    spent: totals.spent,
+    bookings: mine.filter((deal) => onDay(deal, start, end) && !DEAD_STATUSES.has(deal.status)).length,
+    doubleBookings: 0,
+    utilisation: totals.utilisation,
+    pendingRequests: mine.filter((deal) => {
+      if (!['PENDING', 'COUNTERED'].includes(deal.status)) return false;
+      if (!deal.items.some((item) => item.providerId === businessId)) return false;
+      const open = [...deal.offers].reverse().find((offer) => offer.status === 'OPEN');
+      return !open || open.fromBusinessId !== businessId;
+    }).length,
+    avgResponseMins,
+    activeRequests: mine.filter((deal) => deal.seekerId === businessId && IN_FLIGHT.has(deal.status)).length,
+    byCategory: [...byCategory].map(([category, value]) => ({ category, ...value })),
+    series: eachDay(start, end).map((day) => {
+      const key = ymd(day);
+      const onThisDay = inRange.filter((deal) => ymd(deal.createdAt) === key && involves(deal, businessId) && !DEAD_STATUSES.has(deal.status));
+      return {
+        date: key,
+        earned: onThisDay.filter((deal) => DEAL_STATUSES.has(deal.status)).reduce((sum, deal) => sum + lineValue(deal, businessId), 0),
+        spent: onThisDay.filter((deal) => deal.seekerId === businessId).reduce((sum, deal) => sum + deal.total, 0),
+      };
+    }),
+  };
+}

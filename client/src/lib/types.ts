@@ -34,6 +34,20 @@ export type OfferStatus = (typeof OFFER_STATUSES)[number];
 export const LISTING_STATUSES = ["ACTIVE", "PAUSED"] as const;
 export type ListingStatus = (typeof LISTING_STATUSES)[number];
 
+export const LISTING_PHOTO_POSITIONS = ["FRONT", "SIDE", "IN_PLACE"] as const;
+export type ListingPhotoPosition = (typeof LISTING_PHOTO_POSITIONS)[number];
+
+export const LISTING_PHOTO_LABEL: Record<ListingPhotoPosition, { title: string; hint: string }> = {
+  FRONT: { title: "Front", hint: "The whole item, straight on." },
+  SIDE: { title: "Side", hint: "The same item from the side, so its depth shows." },
+  IN_PLACE: { title: "Where it sits", hint: "The item in your space — a rack, hall, kitchen or van." },
+};
+
+export interface ListingPhoto {
+  position: ListingPhotoPosition;
+  url: string;
+}
+
 export const CANCELLATION_POLICIES = ["FLEXIBLE", "MODERATE", "STRICT"] as const;
 export type CancellationPolicy = (typeof CANCELLATION_POLICIES)[number];
 
@@ -119,6 +133,8 @@ export interface Resource {
   cancellation?: CancellationPolicy;
   /** Refundable security deposit (INR). */
   deposit?: number;
+  /** Live shots from three positions. A downloaded catalogue image is not accepted. */
+  photos?: ListingPhoto[];
   /** Provider's own unavailable windows (maintenance, in-house events). */
   blackouts?: AvailabilityBlock[];
 }
@@ -294,9 +310,11 @@ export interface RespondBookingInput {
   message?: string;
 }
 
-export type CreateResourceInput = Omit<Resource, "id" | "businessId" | "available" | "status"> & {
+export type CreateResourceInput = Omit<Resource, "id" | "businessId" | "available" | "status" | "photos"> & {
   available?: number;
   status?: ListingStatus;
+  /** JPEG data URLs captured in the listing camera, one per position. */
+  photos?: { position: ListingPhotoPosition; dataUrl: string }[];
 };
 
 export interface UpdateResourceInput {
@@ -394,4 +412,71 @@ export interface AnalyticsSummary {
   activeRequests: number;
   byCategory: { category: ResourceCategory; bookings: number; revenue: number }[];
   series: { date: string; earned: number; spent: number }[];
+}
+
+export interface HandoverLine {
+  resourceId: string;
+  title: string;
+  quantity: number;
+  agreedPrice: number;
+  unitLabel: string;
+}
+
+export interface HandoverSignature {
+  role: "PROVIDER" | "SEEKER";
+  purpose: "DISPATCH" | "RECEIPT";
+  imageUrl: string;
+  signedAt: string;
+}
+
+export type HandoverPhase = "DISPATCH" | "RECEIPT" | "RETURN" | "CLOSED";
+
+export interface HandoverDispute {
+  id: string;
+  openedById: string;
+  phase: "RECEIPT" | "RETURN";
+  nature: string;
+  fault: "PROVIDER" | "SEEKER";
+  reason: string;
+  note: string;
+  receivedQuantity: number | null;
+  damagedQuantity: number | null;
+  severity: "MINOR" | "MODERATE" | "SEVERE" | null;
+  status: "OPEN" | "AGREED";
+  seekerAgreed: boolean;
+  providerAgreed: boolean;
+  rentDue: number;
+  damageDue: number;
+  refund: number;
+  createdAt: string;
+}
+
+/** One printed contract between the seeker and a single provider on a request. */
+export interface HandoverContract {
+  id: string;
+  bookingId: string;
+  ref: string;
+  title: string;
+  provider: { id: string; name: string };
+  seeker: { id: string; name: string };
+  lines: HandoverLine[];
+  terms: string[];
+  cancellation: string | null;
+  rentTotal: number;
+  deposit: number;
+  arrivedAt: string | null;
+  returnedAt: string | null;
+  seekerApprovedAt: string | null;
+  providerApprovedAt: string | null;
+  phase: HandoverPhase;
+  booked: number;
+  disputeWindowEndsAt: string | null;
+  windowOpen: boolean;
+  signatures: HandoverSignature[];
+  scans: { businessId: string; role: "PROVIDER" | "SEEKER"; phase: string; scannedAt: string }[];
+  disputes: HandoverDispute[];
+  settlement: { rentDue: number; damageDue: number; refund: number; deposit: number; locked: boolean };
+  qrDataUrl: string;
+  viewerRole: "PROVIDER" | "SEEKER" | null;
+  viewerHasScanned: boolean;
 }

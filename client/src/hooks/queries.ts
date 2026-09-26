@@ -26,6 +26,7 @@ import type {
   Role,
   SavedSearch,
   UpdateResourceInput,
+  HandoverContract,
 } from "@/lib/types";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
@@ -48,6 +49,7 @@ export const queryKeys = {
   report: (range: DateRange) => ["analytics", "report", range] as const,
   notifications: () => ["notifications"] as const,
   myResources: () => ["resources", "mine"] as const,
+  contract: (id: string) => ["contract", id] as const,
   savedSearches: () => ["saved-searches"] as const,
 };
 
@@ -376,5 +378,95 @@ export function useNotifications() {
         () => data(api.get<Notification[]>("/notifications"))
       ),
     refetchInterval: USE_MOCK ? false : 60_000,
+  });
+}
+
+function rememberContract(qc: ReturnType<typeof useQueryClient>, contract: HandoverContract) {
+  qc.setQueryData(queryKeys.contract(contract.id), contract);
+  qc.invalidateQueries({ queryKey: ["contracts", "booking", contract.bookingId] });
+}
+
+export function useBookingContracts(bookingId: string | undefined, enabled: boolean) {
+  return useQuery({
+    queryKey: ["contracts", "booking", bookingId ?? ""],
+    queryFn: () => data(api.get<HandoverContract[]>(`/bookings/${bookingId}/contracts`)),
+    enabled: Boolean(bookingId) && enabled && !USE_MOCK,
+  });
+}
+
+export function useContract(id: string | undefined) {
+  return useQuery({
+    queryKey: queryKeys.contract(id ?? ""),
+    queryFn: () => data(api.get<HandoverContract>(`/contracts/${id}`)),
+    enabled: Boolean(id) && !USE_MOCK,
+  });
+}
+
+export function useRecordArrival() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => data(api.post<HandoverContract>(`/contracts/${id}/scan`)),
+    onSuccess: (contract) => rememberContract(qc, contract),
+    onError: (e) => toast.error("Scan was not recorded", { description: apiErrorMessage(e) }),
+  });
+}
+
+export function useApproveHandover() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => data(api.post<HandoverContract>(`/contracts/${id}/approve`)),
+    onSuccess: (contract) => {
+      rememberContract(qc, contract);
+      toast.success("Approved");
+    },
+    onError: (e) => toast.error("Couldn't record the approval", { description: apiErrorMessage(e) }),
+  });
+}
+
+export function useSignContract() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, purpose, dataUrl }: { id: string; purpose: "DISPATCH" | "RECEIPT"; dataUrl: string }) =>
+      data(api.post<HandoverContract>(`/contracts/${id}/sign`, { purpose, dataUrl })),
+    onSuccess: (contract) => {
+      rememberContract(qc, contract);
+      toast.success("Signed page saved");
+    },
+    onError: (e) => toast.error("Couldn't save that scan", { description: apiErrorMessage(e) }),
+  });
+}
+
+export function useOpenDispute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      nature: string;
+      note: string;
+      receivedQuantity?: number;
+      damagedQuantity?: number;
+      severity?: "MINOR" | "MODERATE" | "SEVERE";
+    }) => data(api.post<HandoverContract>(`/contracts/${id}/disputes`, body)),
+    onSuccess: (contract) => {
+      rememberContract(qc, contract);
+      toast.success("Dispute opened", { description: "It closes when both sides agree." });
+    },
+    onError: (e) => toast.error("Couldn't open the dispute", { description: apiErrorMessage(e) }),
+  });
+}
+
+export function useAgreeDispute() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, disputeId }: { id: string; disputeId: string }) =>
+      data(api.post<HandoverContract>(`/contracts/${id}/disputes/${disputeId}/agree`)),
+    onSuccess: (contract) => {
+      rememberContract(qc, contract);
+      toast.success("Agreement recorded");
+    },
+    onError: (e) => toast.error("Couldn't record agreement", { description: apiErrorMessage(e) }),
   });
 }

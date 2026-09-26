@@ -11,12 +11,14 @@ import {
   CANCELLATION_LABEL,
   CANCELLATION_POLICIES,
   CATEGORY_LABEL,
+  LISTING_PHOTO_LABEL,
   RESOURCE_CATEGORIES,
   type MyResource,
   type PriceUnit,
   type ResourceCategory,
 } from "@/lib/types";
 import { cn, formatINR } from "@/lib/utils";
+import { PhotosStep } from "./PhotosStep";
 import {
   conditionsSchema,
   detailsSchema,
@@ -37,7 +39,7 @@ import {
 /* Primitives                                                          */
 /* ------------------------------------------------------------------ */
 
-const STEPS = ["Details", "Pricing", "Availability", "Conditions", "Review"] as const;
+const STEPS = ["Details", "Photos", "Pricing", "Availability", "Conditions", "Review"] as const;
 
 const control = (invalid?: boolean) =>
   cn(
@@ -218,7 +220,7 @@ function PricingStep({ initial, onNext, onBack }: { initial?: PricingValues; onN
           A minimum booking of one unit{delivers ? ", delivered 5 km," : ""} comes to <span className="font-mono">₹{formatINR(Math.round(example))}</span>.
         </p>
       )}
-      <Footer step={1} onBack={onBack} />
+      <Footer step={2} onBack={onBack} />
     </form>
   );
 }
@@ -307,7 +309,7 @@ function AvailabilityStep({
       <Button type="button" variant="outline" size="sm" onClick={addBlock} disabled={fields.length >= 12}>
         <CalendarPlus /> Add block
       </Button>
-      <Footer step={2} onBack={onBack} />
+      <Footer step={3} onBack={onBack} />
     </form>
   );
 }
@@ -415,7 +417,7 @@ function ConditionsStep({
       <Field label="Security deposit (₹)" hint="optional · refunded after return" error={errors.deposit?.message} className="max-w-[220px]">
         <input type="number" inputMode="numeric" className={cn(control(!!errors.deposit), "h-10 font-mono")} {...register("deposit", { setValueAs: optionalNumber })} />
       </Field>
-      <Footer step={3} onBack={onBack} />
+      <Footer step={4} onBack={onBack} />
     </form>
   );
 }
@@ -435,7 +437,7 @@ function ReviewStep({
   onBack: () => void;
   onSubmit: () => void;
 }) {
-  const { details: d, pricing: p, availability: a, conditions: c } = draft;
+  const { details: d, photos, pricing: p, availability: a, conditions: c } = draft;
   const sections: { step: number; title: string; rows: [string, string][] }[] = [
     {
       step: 0,
@@ -448,7 +450,7 @@ function ReviewStep({
       ],
     },
     {
-      step: 1,
+      step: 2,
       title: "Pricing",
       rows: [
         ["Price", `₹${formatINR(p.price)} ${UNIT_LABEL[p.unit]}`],
@@ -457,14 +459,14 @@ function ReviewStep({
       ],
     },
     {
-      step: 2,
+      step: 3,
       title: "Availability",
       rows: a.blocks.length
         ? a.blocks.map((b, i) => [`Block ${i + 1}`, `${format(parseLocal(b.start), "d MMM, h:mm a")} – ${format(parseLocal(b.end), "d MMM, h:mm a")} · ${b.quantity}`] as [string, string])
         : [["Blocks", "None — fully bookable"]],
     },
     {
-      step: 3,
+      step: 4,
       title: "Conditions",
       rows: [
         ["Cancellation", CANCELLATION_LABEL[c.cancellation]],
@@ -476,6 +478,22 @@ function ReviewStep({
 
   return (
     <div className="space-y-4">
+      <section className="rounded-md border border-border bg-paper/50 p-4">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="font-sans text-sm font-medium tracking-normal text-text">Photos</h3>
+          <button type="button" onClick={() => onEdit(1)} className="inline-flex items-center gap-1 text-xs text-muted hover:text-text">
+            <Pencil className="size-3" /> Edit
+          </button>
+        </div>
+        <div className="grid grid-cols-3 gap-2">
+          {photos.map((photo) => (
+            <figure key={photo.position}>
+              <img src={photo.dataUrl} alt="" className="aspect-[4/3] w-full rounded-md object-cover" />
+              <figcaption className="mt-1 text-[11px] text-muted">{LISTING_PHOTO_LABEL[photo.position].title}</figcaption>
+            </figure>
+          ))}
+        </div>
+      </section>
       {sections.map((s) => (
         <section key={s.title} className="rounded-md border border-border bg-paper/50 p-4">
           <div className="mb-2 flex items-center justify-between">
@@ -500,7 +518,7 @@ function ReviewStep({
           onSubmit();
         }}
       >
-        <Footer step={4} onBack={onBack} next={pending ? "Saving…" : mode === "create" ? "Publish listing" : "Save changes"} pending={pending} />
+        <Footer step={5} onBack={onBack} next={pending ? "Saving…" : mode === "create" ? "Publish listing" : "Save changes"} pending={pending} />
       </form>
     </div>
   );
@@ -554,7 +572,7 @@ export function ResourceWizard({ open, onClose, resource }: ResourceWizardProps)
     go(next);
   };
 
-  const complete = draft.details && draft.pricing && draft.availability && draft.conditions ? (draft as Required<WizardDraft>) : undefined;
+  const complete = draft.details && draft.photos?.every((photo) => photo.dataUrl) && draft.pricing && draft.availability && draft.conditions ? (draft as Required<WizardDraft>) : undefined;
   const pending = create.isPending || update.isPending;
 
   const submit = () => {
@@ -606,9 +624,9 @@ export function ResourceWizard({ open, onClose, resource }: ResourceWizardProps)
                   <X className="size-4" />
                 </button>
               </div>
-              <ol className="mt-4 grid grid-cols-5 gap-1.5" aria-label="Steps">
+              <ol className="mt-4 grid grid-cols-6 gap-1.5" aria-label="Steps">
                 {STEPS.map((label, i) => {
-                  const reachable = i <= step || (i === 4 && !!complete) || (mode === "edit" && !!complete);
+                  const reachable = i <= step || (i === 5 && !!complete) || (mode === "edit" && !!complete);
                   return (
                     <li key={label}>
                       <button
@@ -645,26 +663,27 @@ export function ResourceWizard({ open, onClose, resource }: ResourceWizardProps)
                   transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
                 >
                   {step === 0 && <DetailsStep initial={draft.details} onNext={save("details", 1)} />}
-                  {step === 1 && <PricingStep initial={draft.pricing} onNext={save("pricing", 2)} onBack={() => go(0)} />}
-                  {step === 2 && (
+                  {step === 1 && <PhotosStep initial={draft.photos} onNext={save("photos", 2)} onBack={() => go(0)} />}
+                  {step === 2 && <PricingStep initial={draft.pricing} onNext={save("pricing", 3)} onBack={() => go(1)} />}
+                  {step === 3 && (
                     <AvailabilityStep
                       initial={draft.availability}
                       quantity={draft.details?.quantity ?? 1}
                       unitLabel={draft.details?.unitLabel ?? ""}
-                      onNext={save("availability", 3)}
-                      onBack={() => go(1)}
-                    />
-                  )}
-                  {step === 3 && (
-                    <ConditionsStep
-                      initial={draft.conditions}
-                      category={draft.details?.category ?? "CHAIRS_TABLES"}
-                      onNext={save("conditions", 4)}
+                      onNext={save("availability", 4)}
                       onBack={() => go(2)}
                     />
                   )}
-                  {step === 4 && complete && (
-                    <ReviewStep draft={complete} mode={mode} pending={pending} onEdit={go} onBack={() => go(3)} onSubmit={submit} />
+                  {step === 4 && (
+                    <ConditionsStep
+                      initial={draft.conditions}
+                      category={draft.details?.category ?? "CHAIRS_TABLES"}
+                      onNext={save("conditions", 5)}
+                      onBack={() => go(3)}
+                    />
+                  )}
+                  {step === 5 && complete && (
+                    <ReviewStep draft={complete} mode={mode} pending={pending} onEdit={go} onBack={() => go(4)} onSubmit={submit} />
                   )}
                 </motion.div>
               </AnimatePresence>

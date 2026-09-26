@@ -180,3 +180,22 @@ html.lenis body {
     @apply rounded-md border border-border bg-card px-2.5 py-1.5 text-ink shadow-card;
   }
 }
+
+@media print {
+  .paper-grain {
+    display: none !important;
+  }
+
+  body {
+    background: white !important;
+  }
+
+  main .container {
+    max-width: none;
+    padding: 0;
+  }
+
+  .contract-sheet {
+    box-shadow: none;
+  }
+}
