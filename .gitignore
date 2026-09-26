@@ -18,6 +18,6 @@ prisma/dev.db
 prisma/dev.db-shm
 prisma/dev.db-wal
 .next/
-out/
+server/uploads/
 test-results/
 playwright-report/

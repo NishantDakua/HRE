@@ -1,8 +1,11 @@
-import { Router } from 'express';
+import { Router, type Request, type Response } from 'express';
+import { clerkClient, getAuth } from '@clerk/express';
 import { PrismaClient, type ExchangeBusiness, type ExchangeListing, type ExchangeBooking, type ExchangeOffer, type ExchangeReview } from '@prisma/client';
-import { buildAnalyticsReport } from '../exchange/report.js';
+import { buildLiveReport, liveSummary, type LiveDeal } from '../exchange/report.js';
+import { ensureContracts } from '../exchange/contracts.js';
+import { PhotoError, storeListingPhotos } from '../exchange/photos.js';
 
-const prisma = new PrismaClient();
+export const prisma = new PrismaClient();
 const router = Router();
 
 for (const method of ['get', 'post', 'patch'] as const) {
@@ -17,8 +20,6 @@ for (const method of ['get', 'post', 'patch'] as const) {
     })) as typeof router.get;
 }
 
-const SEEKER_ID = 'b02';
-const PROVIDER_ID = 'b09';
 const ACTIVE = ['PENDING', 'COUNTERED'];
 const AREAS = ['Andheri', 'Bandra', 'Powai', 'Lower Parel', 'Juhu', 'Vashi'] as const;
 const AREA_ANCHOR: Record<(typeof AREAS)[number], string> = {
@@ -30,7 +31,63 @@ const AREA_ANCHOR: Record<(typeof AREAS)[number], string> = {
   Vashi: 'b06',
 };
 
-const listingInclude = { business: true } as const;
+async function actorBusiness(req: Request) {
+  const { userId } = getAuth(req);
+  if (!userId) return null;
+  const linked = await prisma.exchangeBusiness.findUnique({ where: { clerkUserId: userId } });
+  if (linked) return linked;
+  const clerkUser = await clerkClient.users.getUser(userId);
+  const email = clerkUser.emailAddresses[0]?.emailAddress?.toLowerCase();
+  if (!email) return null;
+  const match = await prisma.exchangeBusiness.findFirst({ where: { ownerEmail: email } });
+  if (!match) return null;
+  return prisma.exchangeBusiness.update({ where: { id: match.id }, data: { clerkUserId: userId } });
+}
+
+async function requireActor(req: Request, res: Response) {
+  const business = await actorBusiness(req);
+  if (!business) {
+    res.status(401).json({ error: 'Sign in required' });
+    return null;
+  }
+  return business;
+}
+
+function isParty(row: { seekerId: string; items: { providerId: string }[] }, businessId: string) {
+  return row.seekerId === businessId || row.items.some((item) => item.providerId === businessId);
+}
+
+async function dealsFor(businessId: string): Promise<LiveDeal[]> {
+  const rows = await prisma.exchangeBooking.findMany({
+    where: {
+      OR: [{ seekerId: businessId }, { items: { some: { providerId: businessId } } }],
+    },
+    include: {
+      seeker: true,
+      items: { include: { resource: true } },
+      offers: { orderBy: { round: 'asc' } },
+    },
+  });
+  const businesses = new Map((await prisma.exchangeBusiness.findMany()).map((business) => [business.id, business]));
+  return rows.map((row) => ({
+    createdAt: row.createdAt,
+    startAt: row.startAt,
+    status: row.status,
+    seekerId: row.seekerId,
+    seekerArea: row.seeker.area,
+    total: row.total,
+    offers: row.offers.map((offer) => ({ fromBusinessId: offer.fromBusinessId, status: offer.status })),
+    items: row.items.map((item) => ({
+      providerId: item.providerId,
+      category: item.resource.category,
+      agreedPrice: item.agreedPrice,
+      quantity: item.quantity,
+      area: businesses.get(item.providerId)?.area ?? row.seeker.area,
+    })),
+  }));
+}
+
+const listingInclude = { business: true, photos: true } as const;
 const bookingInclude = {
   seeker: true,
   items: { include: { resource: true } },
@@ -38,7 +95,10 @@ const bookingInclude = {
   reviews: true,
 };
 
-type ListingRow = ExchangeListing & { business: ExchangeBusiness };
+type ListingRow = ExchangeListing & {
+  business: ExchangeBusiness;
+  photos: { position: string; url: string }[];
+};
 type BookingRow = ExchangeBooking & {
   seeker: ExchangeBusiness;
   items: { id: string; resourceId: string; providerId: string; quantity: number; agreedPrice: number; resource: ExchangeListing }[];
@@ -87,6 +147,10 @@ function listingJson(row: ListingRow) {
     conditions: row.conditions.length ? row.conditions : undefined,
     cancellation: row.cancellation ?? undefined,
     deposit: row.deposit ?? undefined,
+    photos: ['FRONT', 'SIDE', 'IN_PLACE']
+      .map((position) => row.photos.find((photo) => photo.position === position))
+      .filter((photo): photo is { position: string; url: string } => Boolean(photo))
+      .map((photo) => ({ position: photo.position, url: photo.url })),
   };
   return { ...listing, business: businessJson(row.business) };
 }
@@ -214,9 +278,11 @@ router.get('/resources', async (req, res) => {
   res.json(list);
 });
 
-router.get('/resources/mine', async (_req, res) => {
+router.get('/resources/mine', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
   const rows = await prisma.exchangeListing.findMany({
-    where: { businessId: PROVIDER_ID },
+    where: { businessId: actor.id },
     include: listingInclude,
   });
   const pending = await prisma.exchangeBooking.findMany({
@@ -272,12 +338,21 @@ router.get('/resources/:id', async (req, res) => {
 });
 
 router.post('/resources', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
   const body = req.body ?? {};
   const id = `r${Date.now().toString(36)}`;
+  let photos;
+  try {
+    photos = await storeListingPhotos(id, body.photos ?? []);
+  } catch (error) {
+    if (error instanceof PhotoError) return res.status(error.status).json({ error: error.message });
+    throw error;
+  }
   const row = await prisma.exchangeListing.create({
     data: {
       id,
-      businessId: PROVIDER_ID,
+      businessId: actor.id,
       title: body.title,
       category: body.category,
       description: body.description ?? '',
@@ -296,6 +371,7 @@ router.post('/resources', async (req, res) => {
       conditions: body.conditions ?? [],
       cancellation: body.cancellation ?? null,
       deposit: body.deposit ?? null,
+      photos: { create: photos },
     },
     include: listingInclude,
   });
@@ -303,9 +379,21 @@ router.post('/resources', async (req, res) => {
 });
 
 router.patch('/resources/:id', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
   const patch = req.body ?? {};
   const existing = await prisma.exchangeListing.findUnique({ where: { id: req.params.id } });
-  if (!existing) return res.status(404).json({ error: 'Resource not found' });
+  if (!existing || existing.businessId !== actor.id) return res.status(404).json({ error: 'Resource not found' });
+  if (Array.isArray(patch.photos)) {
+    try {
+      const photos = await storeListingPhotos(existing.id, patch.photos);
+      await prisma.exchangeListingPhoto.deleteMany({ where: { listingId: existing.id } });
+      await prisma.exchangeListingPhoto.createMany({ data: photos.map((photo) => ({ ...photo, listingId: existing.id })) });
+    } catch (error) {
+      if (error instanceof PhotoError) return res.status(error.status).json({ error: error.message });
+      throw error;
+    }
+  }
   const row = await prisma.exchangeListing.update({
     where: { id: req.params.id },
     data: {
@@ -324,8 +412,9 @@ router.patch('/resources/:id', async (req, res) => {
 
 router.post('/matches', async (req, res) => {
   const requirement = req.body ?? {};
-  const originId = requirement.area ? AREA_ANCHOR[requirement.area as (typeof AREAS)[number]] : SEEKER_ID;
-  const origin = await prisma.exchangeBusiness.findUnique({ where: { id: originId ?? SEEKER_ID } });
+  const actor = await actorBusiness(req);
+  const originId = actor?.id ?? (requirement.area ? AREA_ANCHOR[requirement.area as (typeof AREAS)[number]] : 'b02');
+  const origin = actor ?? (await prisma.exchangeBusiness.findUnique({ where: { id: originId } }));
   const rows = await prisma.exchangeListing.findMany({
     where: { category: requirement.category, available: { gt: 0 }, status: 'ACTIVE' },
     include: listingInclude,
@@ -399,12 +488,14 @@ router.post('/requests/parse', (req, res) => {
 });
 
 router.get('/bookings', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
   const role = req.query.role === 'provider' ? 'provider' : 'seeker';
   const rows = await prisma.exchangeBooking.findMany({
     where:
       role === 'seeker'
-        ? { seekerId: SEEKER_ID }
-        : { items: { some: { providerId: PROVIDER_ID } } },
+        ? { seekerId: actor.id }
+        : { items: { some: { providerId: actor.id } } },
     include: bookingInclude,
     orderBy: { createdAt: 'desc' },
   });
@@ -415,18 +506,23 @@ router.get('/bookings', async (req, res) => {
 });
 
 router.get('/bookings/:id', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
   const row = await prisma.exchangeBooking.findUnique({
     where: { id: req.params.id },
     include: bookingInclude,
   });
-  if (!row) return res.status(404).json({ error: 'Booking not found' });
+  if (!row || !isParty(row, actor.id)) return res.status(404).json({ error: 'Booking not found' });
   res.json(await bookingDetail(row));
 });
 
 router.post('/bookings', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
   const input = req.body ?? {};
   const listing = await prisma.exchangeListing.findUnique({ where: { id: input.resourceId } });
   if (!listing) return res.status(404).json({ error: 'Resource not found' });
+  if (listing.businessId === actor.id) return res.status(400).json({ error: 'You already own this resource' });
   const quantity = Number(input.quantity);
   if (quantity > listing.available) {
     return res.status(409).json({
@@ -446,7 +542,7 @@ router.post('/bookings', async (req, res) => {
     data: {
       id,
       ref,
-      seekerId: SEEKER_ID,
+      seekerId: actor.id,
       title: input.title ?? listing.title,
       status: 'PENDING',
       startAt: new Date(input.startAt),
@@ -461,7 +557,7 @@ router.post('/bookings', async (req, res) => {
         create: [{
           id: `o-${id}-1`,
           resourceId: listing.id,
-          fromBusinessId: SEEKER_ID,
+          fromBusinessId: actor.id,
           toBusinessId: listing.businessId,
           round: 1,
           price,
@@ -479,6 +575,8 @@ router.post('/bookings', async (req, res) => {
 });
 
 router.post('/bookings/bundle', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
   const input = req.body ?? {};
   const created: Awaited<ReturnType<typeof bookingDetail>>[] = [];
   for (const [index, item] of (input.items ?? []).entries()) {
@@ -489,7 +587,7 @@ router.post('/bookings/bundle', async (req, res) => {
       data: {
         id,
         ref: `SPR-${Math.random().toString(36).slice(2, 6).toUpperCase()}`,
-        seekerId: SEEKER_ID,
+        seekerId: actor.id,
         title: input.title ?? listing.title,
         status: 'PENDING',
         startAt: new Date(input.startAt),
@@ -513,22 +611,29 @@ router.post('/bookings/bundle', async (req, res) => {
 });
 
 router.post('/bookings/:id/respond', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
   const row = await prisma.exchangeBooking.findUnique({
     where: { id: req.params.id },
     include: bookingInclude,
   });
-  if (!row) return res.status(404).json({ error: 'Booking not found' });
+  if (!row || !isParty(row, actor.id)) return res.status(404).json({ error: 'Booking not found' });
   const action = req.body?.action;
   const next = action === 'accept' ? 'ACCEPTED' : action === 'reject' ? 'REJECTED' : 'COUNTERED';
+  const item = row.items[0];
+  const asSeeker = actor.id === row.seekerId;
   if (action === 'counter' && req.body?.price !== undefined) {
-    const item = row.items[0];
+    await prisma.exchangeOffer.updateMany({
+      where: { bookingId: row.id, status: 'OPEN' },
+      data: { status: 'COUNTERED' },
+    });
     await prisma.exchangeOffer.create({
       data: {
         id: `o-${row.id}-${row.offers.length + 1}`,
         bookingId: row.id,
         resourceId: item.resourceId,
-        fromBusinessId: req.body.as === 'seeker' ? row.seekerId : item.providerId,
-        toBusinessId: req.body.as === 'seeker' ? item.providerId : row.seekerId,
+        fromBusinessId: actor.id,
+        toBusinessId: asSeeker ? item.providerId : row.seekerId,
         round: row.offers.length + 1,
         price: Number(req.body.price),
         quantity: item.quantity,
@@ -538,26 +643,35 @@ router.post('/bookings/:id/respond', async (req, res) => {
         expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
       },
     });
+    await prisma.exchangeBookingItem.update({
+      where: { id: item.id },
+      data: { agreedPrice: Number(req.body.price) },
+    });
   }
   const updated = await prisma.exchangeBooking.update({
     where: { id: row.id },
     data: { status: next },
     include: bookingInclude,
   });
+  if (next === 'ACCEPTED') await ensureContracts(prisma, updated.id);
   res.json(await bookingDetail(updated));
 });
 
 router.post('/bookings/:id/reviews', async (req, res) => {
-  const row = await prisma.exchangeBooking.findUnique({ where: { id: req.params.id } });
-  if (!row) return res.status(404).json({ error: 'Booking not found' });
+  const actor = await requireActor(req, res);
+  if (!actor) return;
+  const row = await prisma.exchangeBooking.findUnique({
+    where: { id: req.params.id },
+    include: { items: true },
+  });
+  if (!row || !isParty(row, actor.id)) return res.status(404).json({ error: 'Booking not found' });
   if (row.status !== 'COMPLETED') {
     return res.status(400).json({ error: 'Only completed bookings can be reviewed' });
   }
-  const as = req.body?.as === 'provider' ? 'provider' : 'seeker';
   await prisma.exchangeReview.create({
     data: {
       bookingId: row.id,
-      byBusinessId: as === 'seeker' ? SEEKER_ID : PROVIDER_ID,
+      byBusinessId: actor.id,
       rating: Number(req.body?.rating ?? 5),
       text: String(req.body?.text ?? ''),
       tags: Array.isArray(req.body?.tags) ? req.body.tags : [],
@@ -571,8 +685,13 @@ router.post('/bookings/:id/reviews', async (req, res) => {
   res.status(201).json(await bookingDetail(updated));
 });
 
-router.get('/saved-searches', async (_req, res) => {
-  const rows = await prisma.exchangeSavedSearch.findMany({ orderBy: { createdAt: 'desc' } });
+router.get('/saved-searches', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
+  const rows = await prisma.exchangeSavedSearch.findMany({
+    where: { businessId: actor.id },
+    orderBy: { createdAt: 'desc' },
+  });
   res.json(
     rows.map((row) => ({
       id: row.id,
@@ -584,8 +703,13 @@ router.get('/saved-searches', async (_req, res) => {
   );
 });
 
-router.get('/notifications', async (_req, res) => {
-  const rows = await prisma.exchangeNotification.findMany({ orderBy: { createdAt: 'desc' } });
+router.get('/notifications', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
+  const rows = await prisma.exchangeNotification.findMany({
+    where: { businessId: actor.id },
+    orderBy: { createdAt: 'desc' },
+  });
   res.json(
     rows.map((row) => ({
       id: row.id,
@@ -598,61 +722,28 @@ router.get('/notifications', async (_req, res) => {
 });
 
 router.get('/analytics', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
   const range = String(req.query.range ?? '30d');
-  const days = range === '7d' ? 7 : range === '90d' ? 90 : 30;
-  const end = new Date();
-  end.setHours(0, 0, 0, 0);
-  const start = new Date(end.getTime() - (days - 1) * 24 * 60 * 60 * 1000);
-  const bookings = await prisma.exchangeBooking.findMany({
-    where: { status: { notIn: ['CANCELLED', 'REJECTED'] } },
-    include: { items: { include: { resource: true } } },
-  });
-  const inRange = bookings.filter((booking) => booking.createdAt >= start);
-  const earnedOf = (booking: (typeof bookings)[number]) =>
-    booking.items.filter((item) => item.providerId === PROVIDER_ID).reduce((sum, item) => sum + item.agreedPrice * item.quantity, 0);
-  const spentOf = (booking: (typeof bookings)[number]) => (booking.seekerId === SEEKER_ID ? booking.total : 0);
-  const provider = await prisma.exchangeBusiness.findUnique({ where: { id: PROVIDER_ID } });
-  const mine = await prisma.exchangeListing.findMany({ where: { businessId: PROVIDER_ID } });
-  const byCategory = new Map<string, { bookings: number; revenue: number }>();
-  for (const booking of bookings) {
-    for (const item of booking.items) {
-      const row = byCategory.get(item.resource.category) ?? { bookings: 0, revenue: 0 };
-      row.bookings += 1;
-      row.revenue += item.agreedPrice * item.quantity;
-      byCategory.set(item.resource.category, row);
-    }
-  }
-  const series = Array.from({ length: days }, (_, index) => {
-    const day = new Date(start.getTime() + index * 24 * 60 * 60 * 1000);
-    const key = day.toISOString().slice(0, 10);
-    const onDay = bookings.filter((booking) => booking.createdAt.toISOString().slice(0, 10) === key);
-    return {
-      date: key,
-      earned: onDay.reduce((sum, booking) => sum + earnedOf(booking), 0),
-      spent: onDay.reduce((sum, booking) => sum + spentOf(booking), 0),
-    };
-  });
-  res.json({
-    range,
-    earned: inRange.filter((booking) => !ACTIVE.includes(booking.status)).reduce((sum, booking) => sum + earnedOf(booking), 0),
-    spent: inRange.reduce((sum, booking) => sum + spentOf(booking), 0),
-    bookings: inRange.filter((booking) => booking.seekerId === SEEKER_ID || booking.items.some((item) => item.providerId === PROVIDER_ID)).length,
-    doubleBookings: 0,
-    utilisation: mine.length ? mine.reduce((sum, listing) => sum + (listing.quantity ? (listing.quantity - listing.available) / listing.quantity : 0), 0) / mine.length : 0,
-    pendingRequests: bookings.filter((booking) => ACTIVE.includes(booking.status) && booking.items.some((item) => item.providerId === PROVIDER_ID)).length,
-    avgResponseMins: provider?.avgResponseMins ?? 0,
-    activeRequests: bookings.filter((booking) => booking.seekerId === SEEKER_ID && ['PENDING', 'COUNTERED', 'ACCEPTED', 'CONFIRMED', 'IN_USE'].includes(booking.status)).length,
-    byCategory: [...byCategory].map(([category, value]) => ({ category, ...value })),
-    series,
-  });
+  const [deals, listings] = await Promise.all([
+    dealsFor(actor.id),
+    prisma.exchangeListing.findMany({ where: { businessId: actor.id } }),
+  ]);
+  res.json(liveSummary(range, actor.id, deals, listings, actor.avgResponseMins));
 });
 
-router.get('/analytics/report', (req, res) => {
+router.get('/analytics/report', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
   const today = new Date();
   const fallbackTo = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const from = String(req.query.from ?? fallbackTo);
   const to = String(req.query.to ?? from);
-  res.json(buildAnalyticsReport(from, to));
+  const [deals, listings] = await Promise.all([
+    dealsFor(actor.id),
+    prisma.exchangeListing.findMany({ where: { businessId: actor.id } }),
+  ]);
+  res.json(buildLiveReport(from, to, actor.id, deals, listings));
 });
 
 export default router;

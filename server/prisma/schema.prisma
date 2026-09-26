@@ -442,6 +442,8 @@ model ExchangeBusiness {
   fulfillmentRate Float
   verified        Boolean
   joinedAt        DateTime
+  clerkUserId     String?  @unique
+  ownerEmail      String?
   listings        ExchangeListing[]
   seekerBookings  ExchangeBooking[] @relation("SeekerBookings")
 }
@@ -468,10 +470,22 @@ model ExchangeListing {
   conditions     String[]
   cancellation   String?
   deposit        Float?
+  photos         ExchangeListingPhoto[]
   items          ExchangeBookingItem[]
 
   @@index([businessId])
   @@index([category])
+}
+
+model ExchangeListingPhoto {
+  id        String          @id @default(cuid())
+  listingId String
+  listing   ExchangeListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  position  String
+  url       String
+
+  @@unique([listingId, position])
+  @@index([listingId])
 }
 
 model ExchangeBooking {
@@ -490,6 +504,7 @@ model ExchangeBooking {
   items     ExchangeBookingItem[]
   offers    ExchangeOffer[]
   reviews   ExchangeReview[]
+  contracts ExchangeContract[]
 
   @@index([seekerId])
   @@index([status])
@@ -528,6 +543,79 @@ model ExchangeOffer {
   @@index([bookingId])
 }
 
+model ExchangeContract {
+  id         String   @id @default(cuid())
+  bookingId  String
+  booking    ExchangeBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  providerId String
+  seekerId   String
+  lines      Json
+  terms      String[]
+  cancellation String?
+  rentTotal          Float
+  deposit            Float
+  arrivedAt          DateTime?
+  returnedAt         DateTime?
+  seekerApprovedAt   DateTime?
+  providerApprovedAt DateTime?
+  createdAt          DateTime @default(now())
+  signatures ExchangeContractSignature[]
+  scans      ExchangeContractScan[]
+  disputes   ExchangeDispute[]
+
+  @@unique([bookingId, providerId])
+  @@index([seekerId])
+  @@index([providerId])
+}
+
+model ExchangeContractSignature {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   ExchangeContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  role       String
+  purpose    String
+  imageUrl   String
+  signedAt   DateTime @default(now())
+
+  @@unique([contractId, purpose])
+}
+
+model ExchangeContractScan {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   ExchangeContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  businessId String
+  role       String
+  phase      String   @default("RECEIPT")
+  scannedAt  DateTime @default(now())
+
+  @@index([contractId])
+}
+
+model ExchangeDispute {
+  id                String   @id @default(cuid())
+  contractId        String
+  contract          ExchangeContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  openedById        String
+  phase             String   @default("RECEIPT")
+  nature            String   @default("")
+  fault             String
+  reason            String
+  note              String   @default("")
+  receivedQuantity  Int?
+  damagedQuantity   Int?
+  severity          String?
+  status            String   @default("OPEN")
+  seekerAgreed      Boolean  @default(false)
+  providerAgreed    Boolean  @default(false)
+  rentDue           Float
+  damageDue         Float
+  refund            Float
+  createdAt         DateTime @default(now())
+
+  @@index([contractId])
+}
+
 model ExchangeReview {
   id           String          @id @default(cuid())
   bookingId    String
@@ -540,17 +628,23 @@ model ExchangeReview {
 }
 
 model ExchangeNotification {
-  id        String   @id
-  title     String
-  body      String
-  createdAt DateTime
-  read      Boolean  @default(false)
+  id         String   @id
+  businessId String?
+  title      String
+  body       String
+  createdAt  DateTime
+  read       Boolean  @default(false)
+
+  @@index([businessId])
 }
 
 model ExchangeSavedSearch {
   id         String   @id
+  businessId String?
   name       String
   query      String
   createdAt  DateTime
   newMatches Int
+
+  @@index([businessId])
 }

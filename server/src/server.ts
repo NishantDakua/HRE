@@ -1,6 +1,8 @@
 import express, { Express } from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { PrismaClient } from '@prisma/client';
 import { clerkMiddleware } from '@clerk/express';
 
@@ -16,8 +18,12 @@ app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:3100',
   credentials: true
 }));
-app.use(express.json());
+app.use(express.json({ limit: '12mb' }));
 app.use(express.urlencoded({ extended: true }));
+app.use(
+  '/api/uploads',
+  express.static(path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../uploads'))
+);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -30,9 +36,11 @@ import categoryRoutes from './routes/categories.js';
 import homeRoutes from './routes/home.js';
 import newsletterRoutes from './routes/newsletter.js';
 import exchangeRoutes from './routes/exchange.js';
+import contractRoutes from './routes/contracts.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api', exchangeRoutes);
+app.use('/api', contractRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/home', homeRoutes);
 app.use('/api/newsletter', newsletterRoutes);

@@ -159,8 +159,10 @@ export function getResource(id: string) {
 
 export function createResource(input: CreateResourceInput) {
   if (shouldFail()) return failLater<ResourceWithBusiness>();
+  const { photos, ...rest } = input;
   const resource: Resource = {
-    ...input,
+    ...rest,
+    photos: photos?.map((photo) => ({ position: photo.position, url: photo.dataUrl })),
     id: nextId("r"),
     businessId: CURRENT_BUSINESS.provider,
     available: input.available ?? input.quantity,

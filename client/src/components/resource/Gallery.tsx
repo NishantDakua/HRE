@@ -2,8 +2,20 @@ import { ImageIcon } from "lucide-react";
 import { CATEGORY_ART, CATEGORY_TINT } from "@/components/landing/CategoryArt";
 import type { ResourceWithBusiness } from "@/lib/types";
 
-/** Placeholder gallery until listings support photo uploads. */
+/** Live photos when the provider captured them; otherwise the category illustration. */
 export function Gallery({ resource }: { resource: ResourceWithBusiness }) {
+  const photos = resource.photos ?? [];
+  if (photos.length > 0) {
+    const [primary, ...rest] = photos;
+    return (
+      <div className="grid grid-cols-4 grid-rows-2 gap-2 overflow-hidden rounded-lg" aria-label="Photos">
+        <img src={primary.url} alt={`${resource.title}, ${primary.position.toLowerCase().replace("_", " ")}`} className="col-span-4 row-span-2 aspect-[16/9] size-full object-cover sm:col-span-3" />
+        {rest.slice(0, 2).map((photo) => (
+          <img key={photo.position} src={photo.url} alt="" className="hidden size-full object-cover sm:block" />
+        ))}
+      </div>
+    );
+  }
   const Art = CATEGORY_ART[resource.category];
   const tint = CATEGORY_TINT[resource.category];
   return (
@@ -13,7 +25,7 @@ export function Gallery({ resource }: { resource: ResourceWithBusiness }) {
           <Art />
         </div>
         <span className="absolute bottom-3 left-3 inline-flex items-center gap-1.5 rounded-full bg-card/90 px-3 py-1 text-xs text-muted shadow-card">
-          <ImageIcon className="size-3.5" /> Photos coming soon
+          <ImageIcon className="size-3.5" /> No live photos
         </span>
       </div>
       {[0.55, 0.35].map((o) => (

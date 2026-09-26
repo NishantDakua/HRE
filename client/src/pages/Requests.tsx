@@ -6,6 +6,7 @@ import { ArrowLeft, BadgeCheck, Inbox, MapPin, RefreshCw, Search } from "lucide-
 import { StatusPill } from "@/components/StatusPill";
 import { formatWindow } from "@/components/dashboard/format";
 import { NegotiationThread } from "@/components/requests/NegotiationThread";
+import { ContractPanel } from "@/components/requests/ContractPanel";
 import { RequestTimeline } from "@/components/requests/RequestTimeline";
 import { ReviewPanel } from "@/components/requests/ReviewForm";
 import { Button } from "@/components/ui/button";
@@ -164,6 +165,7 @@ function RequestDetail({ id, mode, onBack }: { id: string; mode: Role; onBack: (
         </aside>
         <div className="space-y-8">
           <NegotiationThread booking={b} mode={mode} />
+          <ContractPanel bookingId={b.id} status={b.status} />
           {b.status === "COMPLETED" && <ReviewPanel booking={b} mode={mode} />}
         </div>
       </div>
