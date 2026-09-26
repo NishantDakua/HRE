@@ -3,97 +3,180 @@
 @tailwind utilities;
 
 @layer base {
+  /* Warm light theme. Values are HSL channels so Tailwind alpha modifiers work. */
+  :root {
+    --paper: 38 70% 95%;        /* #FBF4E8 */
+    --sand: 38 65% 87%;         /* #F3E3C7 */
+    --card: 43 100% 99%;        /* #FFFDF8 */
+    --ink: 19 24% 13%;          /* #2A1F1A */
+    --muted: 26 13% 42%;        /* #7A6A5E */
+    --line: 37 45% 82%;         /* #E6D6BD */
+    --terracotta: 16 68% 54%;   /* #D9653B */
+    --marigold: 36 88% 59%;     /* #F2A93B */
+    --peacock: 177 56% 28%;     /* #1F6F6B */
+    --conflict: 7 63% 48%;      /* #C8412E */
+    --pending: 250 29% 56%;     /* #7A6FB0 */
+
+    /* Mumbai art-deco pastels */
+    --peach: 27 79% 79%;        /* #F4C7A1 */
+    --rose: 9 57% 80%;          /* #E9B8B0 */
+    --mint: 143 24% 78%;        /* #B9D4C3 */
+    --butter: 44 83% 80%;       /* #F6DFA0 */
+    --powder: 200 35% 86%;      /* #CFE0E8 */
+
+    --radius: 18px;
+    color-scheme: light;
+
+    /* Fonts (loaded via @fontsource in main.tsx) */
+    --font-display: "Fraunces Variable", Georgia, serif;
+    --font-body: "DM Sans", system-ui, sans-serif;
+    --font-mono: "JetBrains Mono", ui-monospace, monospace;
+    --font-hand: "Caveat", cursive;
+
+    /* Overlay text over the landing hero (RGB channels). DayInMumbai flips these at night. */
+    --hero-fg: 42 31 26;
+    --hero-bg: 251 244 232;
+  }
+
+  * {
+    @apply border-border;
+  }
+
   html {
-    @apply scroll-smooth;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply bg-white text-slate-900 antialiased;
+    @apply bg-bg font-sans text-text;
   }
 
-  h1 {
-    @apply text-4xl font-bold tracking-tight;
+  h1, h2, h3 {
+    @apply font-display tracking-tight;
   }
 
-  h2 {
-    @apply text-3xl font-bold tracking-tight;
+  h1, h2, h3, .font-display {
+    font-optical-sizing: auto;
+    font-variation-settings: "SOFT" 100;
   }
 
-  h3 {
-    @apply text-2xl font-semibold tracking-tight;
+  /* Emphasis words in display type are set in Fraunces italic. */
+  .font-display em,
+  h1 em,
+  h2 em,
+  h3 em {
+    font-style: italic;
+    font-variation-settings: "SOFT" 100, "WONK" 1;
   }
 
-  h4 {
-    @apply text-xl font-semibold;
+  ::selection {
+    background: hsl(var(--marigold) / 0.35);
   }
 
-  h5 {
-    @apply text-lg font-semibold;
-  }
-
-  h6 {
-    @apply text-base font-semibold;
-  }
-
-  a {
-    @apply transition-colors;
+  :focus-visible {
+    @apply outline-none ring-2 ring-primary ring-offset-2 ring-offset-bg;
   }
 }
 
 @layer components {
-  .container-wide {
-    @apply max-w-7xl mx-auto px-4 sm:px-6 lg:px-8;
+  .surface {
+    @apply rounded-lg border border-border bg-card shadow-card;
   }
 
-  .btn-primary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-blue-600 text-white rounded-xl font-semibold shadow-sm shadow-blue-600/20 hover:bg-blue-700 active:bg-blue-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed;
+  .eyebrow {
+    @apply text-[11px] font-medium uppercase tracking-[0.14em] text-muted;
   }
 
-  .btn-secondary {
-    @apply inline-flex items-center justify-center gap-2 px-6 py-3 bg-white text-slate-700 border border-slate-200 rounded-xl font-semibold hover:bg-slate-50 transition-colors;
+  .num {
+    @apply font-mono tabular-nums;
   }
 
-  .btn-ghost {
-    @apply inline-flex items-center justify-center gap-2 px-4 py-2 text-slate-600 rounded-lg font-medium hover:bg-slate-100 transition-colors;
+  .paper-grain {
+    position: fixed;
+    inset: 0;
+    z-index: 100;
+    pointer-events: none;
+    opacity: 0.04;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.16 0 0 0 0 0.12 0 0 0 0 0.10 0 0 0 1 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    background-size: 240px 240px;
+  }
+}
+
+@layer utilities {
+  .conflict-stripes {
+    background-image: repeating-linear-gradient(
+      -45deg,
+      hsl(var(--conflict) / 0.16) 0 4px,
+      transparent 4px 8px
+    );
+  }
+}
+
+/* Lenis */
+html.lenis,
+html.lenis body {
+  height: auto;
+}
+
+.lenis.lenis-smooth {
+  scroll-behavior: auto !important;
+}
+
+.lenis.lenis-smooth [data-lenis-prevent] {
+  overscroll-behavior: contain;
+}
+
+.lenis.lenis-stopped {
+  overflow: hidden;
+}
+
+@keyframes broadcast {
+  from { transform: scale(0.3); opacity: 0.9; }
+  to { transform: scale(2.6); opacity: 0; }
+}
+
+/* Discover map: warm the CARTO Voyager tiles and style our pins. */
+@layer components {
+  .spare-map .leaflet-tile-pane {
+    filter: sepia(0.22) saturate(0.92) hue-rotate(-8deg) brightness(1.02);
   }
 
-  .badge-verified {
-    @apply inline-flex items-center gap-1 px-2.5 py-1 bg-emerald-50 text-emerald-700 rounded-full text-xs font-semibold;
+  /* OSM's standard style is busier and cooler than Voyager — warm and soften it more. */
+  .spare-map--osm .leaflet-tile-pane {
+    filter: sepia(0.38) saturate(0.62) hue-rotate(-10deg) brightness(1.04) contrast(0.92);
   }
 
-  .badge {
-    @apply inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold;
+  .spare-map .leaflet-container {
+    @apply bg-sand font-sans;
   }
 
-  .card {
-    @apply bg-white rounded-2xl border border-slate-200/80 shadow-[0_1px_2px_rgba(15,23,42,0.04)];
+  .spare-pin {
+    @apply grid h-[42px] w-[34px] place-items-start justify-center;
   }
 
-  .input-field {
-    @apply w-full px-4 py-2.5 border border-slate-200 rounded-xl bg-slate-50/60 focus:outline-none focus:ring-2 focus:ring-blue-500/40 focus:border-blue-400 focus:bg-white transition-colors;
+  .spare-pin > span {
+    @apply grid size-[30px] place-items-center rounded-full border-2 border-card bg-ink font-mono text-[11px] text-paper shadow-card transition-transform duration-200;
+    border-bottom-right-radius: 0;
+    transform: rotate(45deg);
   }
 
-  .section-label {
-    @apply inline-flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-600;
+  .spare-pin b {
+    @apply font-medium;
+    transform: rotate(-45deg);
   }
 
-  .pill-tab {
-    @apply px-4 py-2 rounded-full text-sm font-medium whitespace-nowrap transition-colors;
+  .spare-pin.is-active > span {
+    @apply bg-primary text-ink;
+    transform: rotate(45deg) scale(1.25);
   }
 
-  .icon-chip {
-    @apply flex items-center justify-center rounded-xl;
+  .spare-origin {
+    @apply block size-[22px] rounded-full border-4 border-card bg-peacock shadow-card;
+    box-shadow: 0 0 0 6px hsl(var(--peacock) / 0.2);
   }
 
-  .stat-card {
-    @apply card p-5 flex flex-col gap-3;
-  }
-
-  .sidebar-link {
-    @apply flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-slate-300 hover:bg-white/5 hover:text-white transition-colors;
-  }
-
-  .sidebar-link-active {
-    @apply flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-semibold bg-blue-600 text-white shadow-sm;
+  .spare-map .leaflet-tooltip {
+    @apply rounded-md border border-border bg-card px-2.5 py-1.5 text-ink shadow-card;
   }
 }

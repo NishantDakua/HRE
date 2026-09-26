@@ -1,48 +1,118 @@
-import type { Config } from 'tailwindcss'
+import type { Config } from "tailwindcss";
+import animate from "tailwindcss-animate";
+import plugin from "tailwindcss/plugin";
+
+/** `size-*` (width + height) — built into Tailwind 3.4, polyfilled for 3.3. */
+const sizeUtility = plugin(({ matchUtilities, theme }) => {
+  matchUtilities({ size: (value: string) => ({ width: value, height: value }) }, { values: theme("spacing") });
+});
+
+const token = (name: string) => `hsl(var(--${name}) / <alpha-value>)`;
 
 const config: Config = {
-  content: [
-    "./index.html",
-    "./src/**/*.{js,ts,jsx,tsx}",
-  ],
+  content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
+    container: {
+      center: true,
+      padding: { DEFAULT: "1.25rem", md: "2rem" },
+      screens: { "2xl": "1360px" },
+    },
     extend: {
       colors: {
-        navy: {
-          50: '#f0f3fa',
-          100: '#e1e7f5',
-          200: '#c3cfeb',
-          300: '#a5b7e0',
-          400: '#879fd6',
-          500: '#6987cc',
-          600: '#4a5fa2',
-          700: '#354778',
-          800: '#202f4e',
-          900: '#0b1824',
+        // Core palette
+        paper: token("paper"),
+        sand: token("sand"),
+        ink: token("ink"),
+        line: token("line"),
+        terracotta: token("terracotta"),
+        marigold: token("marigold"),
+        peacock: token("peacock"),
+
+        // Mumbai art-deco pastels (illustrations)
+        peach: token("peach"),
+        rose: token("rose"),
+        mint: token("mint"),
+        butter: token("butter"),
+        powder: token("powder"),
+
+        // Semantic
+        bg: token("paper"),
+        surface: token("sand"),
+        card: {
+          DEFAULT: token("card"),
+          foreground: token("ink"),
         },
-        brand: {
-          primary: '#354778',
-          secondary: '#4a5fa2',
-          accent: '#87ceeb',
-        }
+        border: token("line"),
+        text: token("ink"),
+        muted: token("muted"),
+        available: token("peacock"),
+        conflict: token("conflict"),
+        pending: token("pending"),
+
+        // shadcn/ui aliases
+        background: token("paper"),
+        foreground: token("ink"),
+        popover: {
+          DEFAULT: token("card"),
+          foreground: token("ink"),
+        },
+        primary: {
+          DEFAULT: token("terracotta"),
+          foreground: token("ink"),
+        },
+        secondary: {
+          DEFAULT: token("sand"),
+          foreground: token("ink"),
+        },
+        accent: {
+          DEFAULT: token("marigold"),
+          foreground: token("ink"),
+        },
+        destructive: {
+          DEFAULT: token("conflict"),
+          foreground: token("card"),
+        },
+        input: token("line"),
+        ring: token("terracotta"),
       },
-      fontSize: {
-        'xs': ['12px', '16px'],
-        'sm': ['14px', '20px'],
-        'base': ['16px', '24px'],
-        'lg': ['18px', '28px'],
-        'xl': ['20px', '28px'],
-        '2xl': ['24px', '32px'],
-        '3xl': ['30px', '36px'],
-        '4xl': ['36px', '40px'],
-        '5xl': ['48px', '52px'],
+      fontFamily: {
+        display: ["var(--font-display)", "Georgia", "serif"],
+        sans: ["var(--font-body)", "system-ui", "sans-serif"],
+        mono: ["var(--font-mono)", "ui-monospace", "monospace"],
+        hand: ["var(--font-hand)", "cursive"],
+      },
+      borderRadius: {
+        DEFAULT: "var(--radius)",
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 6px)",
+        sm: "calc(var(--radius) - 10px)",
+        xl: "calc(var(--radius) + 4px)",
+      },
+      boxShadow: {
+        none: "none",
+        card: "0 8px 30px rgba(120, 70, 30, 0.08)",
+        "card-hover": "0 12px 36px rgba(120, 70, 30, 0.12)",
+        hairline: "0 0 0 1px hsl(var(--line))",
       },
       spacing: {
-        'gutter': '24px',
-      }
+        18: "4.5rem",
+        22: "5.5rem",
+      },
+      letterSpacing: {
+        tightest: "-0.035em",
+      },
+      keyframes: {
+        "fade-up": {
+          from: { opacity: "0", transform: "translateY(6px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+      },
+      animation: {
+        "fade-up": "fade-up 320ms cubic-bezier(0.22, 1, 0.36, 1) both",
+      },
     },
   },
-  plugins: [],
-}
+  plugins: [animate, sizeUtility],
+};
 
-export default config
+export default config;

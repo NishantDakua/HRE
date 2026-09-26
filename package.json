@@ -3,18 +3,19 @@
   "version": "1.0.0",
   "description": "HRE - Hospitality Resource Exchange B2B Marketplace",
   "private": true,
-  "workspaces": [
-    "client",
-    "server"
-  ],
+  "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "dev": "concurrently \"npm run dev -w client\" \"npm run dev -w server\"",
-    "build": "npm run build -w client && npm run build -w server",
-    "preview": "npm run preview -w client",
-    "lint": "npm run lint -w client && npm run lint -w server",
-    "type-check": "npm run type-check -w client && npm run type-check -w server"
+    "dev": "pnpm --parallel --filter hre-client --filter hre-server dev",
+    "dev:client": "pnpm --filter hre-client dev",
+    "dev:server": "pnpm --filter hre-server dev",
+    "build": "pnpm --filter hre-client build && pnpm --filter hre-server build",
+    "preview": "pnpm --filter hre-client preview",
+    "type-check": "pnpm -r type-check"
   },
-  "devDependencies": {
-    "concurrently": "^8.2.0"
+  "pnpm": {
+    "overrides": {
+      "three": "0.169.0",
+      "@types/three": "0.169.0"
+    }
   }
 }
