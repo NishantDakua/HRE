@@ -1,7 +1,7 @@
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import { Menu, X, Search, ArrowRight } from 'lucide-react';
-import { useAuthStore } from '../stores/auth';
+import { useAuth, UserButton } from '@clerk/react';
 import Logo from './Logo';
 
 const links = [
@@ -15,7 +15,7 @@ const links = [
 export default function Navbar() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
-  const { isAuthenticated } = useAuthStore();
+  const { isSignedIn } = useAuth();
   const location = useLocation();
   const overlay = location.pathname === '/' && !isScrolled;
 
@@ -57,10 +57,13 @@ export default function Navbar() {
           >
             <Search size={17} />
           </Link>
-          {isAuthenticated ? (
-            <Link to="/dashboard" className="btn-primary py-2.5">
-              Dashboard <ArrowRight size={16} />
-            </Link>
+          {isSignedIn ? (
+            <>
+              <Link to="/dashboard" className="btn-primary py-2.5">
+                Dashboard <ArrowRight size={16} />
+              </Link>
+              <UserButton afterSignOutUrl="/" />
+            </>
           ) : (
             <>
               <Link
@@ -94,8 +97,11 @@ export default function Navbar() {
               </Link>
             ))}
             <div className="flex gap-3 pt-3">
-              {isAuthenticated ? (
-                <Link to="/dashboard" className="btn-primary flex-1">Dashboard</Link>
+              {isSignedIn ? (
+                <>
+                  <Link to="/dashboard" className="btn-primary flex-1">Dashboard</Link>
+                  <UserButton afterSignOutUrl="/" />
+                </>
               ) : (
                 <>
                   <Link to="/login" className="btn-secondary flex-1">Login</Link>

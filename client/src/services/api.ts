@@ -8,22 +8,17 @@ const api = axios.create({
   withCredentials: true
 });
 
-// Add token to requests
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('auth_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Note: Clerk provides authentication via HTTP-only cookies and session tokens
+// The backend middleware will handle Clerk authentication via clerkMiddleware()
+// No need to manually add tokens here - Clerk handles it
 
 export const authApi = {
-  login: (email: string, password: string) =>
-    api.post('/auth/login', { email, password }),
-  register: (data: any) =>
-    api.post('/auth/register', data),
-  logout: () =>
-    api.post('/auth/logout'),
+  getCurrentUser: () =>
+    api.get('/auth/me'),
+  completeOnboarding: (data: any) =>
+    api.post('/auth/onboarding', data),
+  updateProfile: (data: any) =>
+    api.put('/auth/profile', data),
 };
 
 export const resourcesApi = {

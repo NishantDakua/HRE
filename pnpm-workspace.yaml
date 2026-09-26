@@ -1,0 +1,10 @@
+packages:
+  - "client"
+  - "server"
+
+allowBuilds:
+  '@clerk/shared': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  esbuild: true
+  prisma: true

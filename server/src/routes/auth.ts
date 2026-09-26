@@ -1,63 +1,137 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
+import { authenticateRequest } from '../middleware/auth.js';
 
 const router = Router();
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'secret-key';
 
-router.post('/login', async (req: Request, res: Response) => {
+// Get current user
+router.get('/me', authenticateRequest, async (req: Request, res: Response) => {
   try {
-    const { email, password } = req.body;
-    const user = await prisma.user.findUnique({
-      where: { email },
-      include: { business: true }
-    });
-
-    if (!user || !await bcrypt.compare(password, user.password)) {
-      return res.status(401).json({ error: 'Invalid credentials' });
+    if (!req.user) {
+      return res.status(401).json({ error: 'Not authenticated' });
     }
 
-    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET);
     res.json({
-      user: { id: user.id, email, firstName: user.firstName, lastName: user.lastName },
-      token,
-      businessId: user.businessId
+      user: {
+        id: req.user.id,
+        email: req.user.email,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        hreRole: req.user.hreRole,
+        businessId: req.user.businessId,
+        onboardingComplete: req.user.onboardingComplete,
+        business: req.user.business,
+      }
     });
   } catch (error) {
-    res.status(500).json({ error: 'Login failed' });
+    res.status(500).json({ error: 'Failed to fetch user' });
   }
 });
 
-router.post('/register', async (req: Request, res: Response) => {
+// Complete onboarding
+router.post('/onboarding', authenticateRequest, async (req: Request, res: Response) => {
   try {
-    const { email, password, firstName, lastName, businessName, businessType, location } = req.body;
+    const { hreRole, businessName, businessType, location, contactPhone } = req.body;
 
-    const business = await prisma.business.create({
-      data: {
-        name: businessName,
-        businessType,
-        location,
-        contactEmail: email,
-        contactPhone: '',
-        users: {
-          create: {
-            email,
-            password: await bcrypt.hash(password, 10),
-            firstName,
-            lastName,
-            role: 'BUSINESS_OWNER'
-          }
+    if (!req.user || !req.user.email) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    // Create or get business
+    let business;
+    if (req.user.businessId) {
+      // Update existing business
+      business = await prisma.business.update({
+        where: { id: req.user.businessId },
+        data: {
+          name: businessName,
+          businessType,
+          location,
+          contactPhone,
         }
+      });
+    } else {
+      // Create new business
+      business = await prisma.business.create({
+        data: {
+          name: businessName,
+          businessType,
+          location,
+          contactEmail: req.user.email,
+          contactPhone,
+        }
+      });
+    }
+
+    // Update user
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        hreRole,
+        businessId: business.id,
+        onboardingComplete: true,
       },
-      include: { users: true }
+      include: { business: true }
     });
 
-    const token = jwt.sign({ id: business.users[0].id }, JWT_SECRET);
-    res.json({ success: true, token });
+    // If provider, create provider profile
+    if ((hreRole === 'PROVIDER' || hreRole === 'BOTH') && !business.providerProfile) {
+      await prisma.providerProfile.create({
+        data: {
+          businessId: business.id,
+        }
+      });
+    }
+
+    res.json({
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        hreRole: updatedUser.hreRole,
+        businessId: updatedUser.businessId,
+        onboardingComplete: updatedUser.onboardingComplete,
+        business: updatedUser.business,
+      }
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Registration failed' });
+    console.error('Onboarding error:', error);
+    res.status(500).json({ error: 'Onboarding failed' });
+  }
+});
+
+// Update user profile
+router.put('/profile', authenticateRequest, async (req: Request, res: Response) => {
+  try {
+    const { firstName, lastName, phoneNumber } = req.body;
+
+    if (!req.user) {
+      return res.status(401).json({ error: 'Not authenticated' });
+    }
+
+    const updatedUser = await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        firstName,
+        lastName,
+        phoneNumber,
+      },
+      include: { business: true }
+    });
+
+    res.json({
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+        hreRole: updatedUser.hreRole,
+        businessId: updatedUser.businessId,
+        onboardingComplete: updatedUser.onboardingComplete,
+      }
+    });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to update profile' });
   }
 });
 

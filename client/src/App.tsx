@@ -1,10 +1,11 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
-import { useAuthStore } from './stores/auth';
+import { useAuth, useUser } from '@clerk/react';
 import PublicLayout from './layouts/PublicLayout';
 import AuthLayout from './layouts/AuthLayout';
 import ProviderLayout from './layouts/ProviderLayout';
+import OnboardingPage from './pages/public/OnboardingPage';
 
 // Public pages
 import HomePage from './pages/public/HomePage';
@@ -56,13 +57,13 @@ import ProviderSettingsPage from './pages/provider/ProviderSettingsPage';
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
-  return isAuthenticated ? <>{children}</> : <Navigate to="/login" replace />;
+  const { isSignedIn } = useAuth();
+  return isSignedIn ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
 function ProviderRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, userRole } = useAuthStore();
-  return isAuthenticated && userRole === 'provider' ? <>{children}</> : <Navigate to="/login" replace />;
+  const { isSignedIn } = useAuth();
+  return isSignedIn ? <>{children}</> : <Navigate to="/login" replace />;
 }
 
 export default function App() {
@@ -87,6 +88,7 @@ export default function App() {
           {/* Auth routes (no layout) */}
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
+          <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/verify-business" element={<VerifyBusinessPage />} />
 
           {/* Authenticated buyer routes */}
