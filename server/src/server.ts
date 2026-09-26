@@ -37,13 +37,19 @@ app.use('/api/categories', categoryRoutes);
 app.use('/api/home', homeRoutes);
 app.use('/api/newsletter', newsletterRoutes);
 
+app.use((error: unknown, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (res.headersSent) return next(error);
+  console.error(error);
+  res.status(500).json({ error: 'Request failed' });
+});
+
 const start = async () => {
   try {
     // Test database connection
     await prisma.$connect();
     console.log('✓ Database connected');
 
-    app.listen(PORT, () => {
+    app.listen(Number(PORT), '0.0.0.0', () => {
       console.log(`✓ Server running on http://localhost:${PORT}`);
     });
   } catch (error) {

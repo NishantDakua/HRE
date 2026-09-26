@@ -1,8 +1,21 @@
 import { Router } from 'express';
 import { PrismaClient, type ExchangeBusiness, type ExchangeListing, type ExchangeBooking, type ExchangeOffer, type ExchangeReview } from '@prisma/client';
+import { buildAnalyticsReport } from '../exchange/report.js';
 
 const prisma = new PrismaClient();
 const router = Router();
+
+for (const method of ['get', 'post', 'patch'] as const) {
+  const original = router[method].bind(router);
+  router[method] = ((path: string, handler: Parameters<typeof original>[1]) =>
+    original(path, async (req, res, next) => {
+      try {
+        await handler(req, res, next);
+      } catch (error) {
+        next(error);
+      }
+    })) as typeof router.get;
+}
 
 const SEEKER_ID = 'b02';
 const PROVIDER_ID = 'b09';
@@ -97,11 +110,11 @@ function weightedTotal(score: Record<string, number>, urgent = false) {
   );
 }
 
-async function bookingDetail(row: BookingRow) {
-  const providers = await prisma.exchangeBusiness.findMany({
-    where: { id: { in: row.items.map((item) => item.providerId) } },
-  });
-  const provider = providers.find((item) => item.id === row.items[0]?.providerId) ?? row.seeker;
+async function bookingDetail(row: BookingRow, businesses?: Map<string, ExchangeBusiness>) {
+  const provider =
+    businesses?.get(row.items[0]?.providerId ?? '') ??
+    (await prisma.exchangeBusiness.findUnique({ where: { id: row.items[0]?.providerId ?? '' } })) ??
+    row.seeker;
   return {
     id: row.id,
     ref: row.ref,
@@ -395,7 +408,10 @@ router.get('/bookings', async (req, res) => {
     include: bookingInclude,
     orderBy: { createdAt: 'desc' },
   });
-  res.json(await Promise.all(rows.map((row) => bookingDetail(row))));
+  const businesses = new Map(
+    (await prisma.exchangeBusiness.findMany()).map((business) => [business.id, business])
+  );
+  res.json(await Promise.all(rows.map((row) => bookingDetail(row, businesses))));
 });
 
 router.get('/bookings/:id', async (req, res) => {
@@ -631,33 +647,12 @@ router.get('/analytics', async (req, res) => {
   });
 });
 
-router.get('/analytics/report', async (req, res) => {
-  const from = String(req.query.from ?? new Date().toISOString().slice(0, 10));
+router.get('/analytics/report', (req, res) => {
+  const today = new Date();
+  const fallbackTo = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const from = String(req.query.from ?? fallbackTo);
   const to = String(req.query.to ?? from);
-  const summary = await prisma.exchangeBooking.findMany({
-    where: { status: { notIn: ['CANCELLED', 'REJECTED'] } },
-    include: { items: { include: { resource: true } } },
-  });
-  const totals = {
-    earned: summary.reduce((sum, booking) => sum + booking.items.filter((item) => item.providerId === PROVIDER_ID).reduce((inner, item) => inner + item.agreedPrice * item.quantity, 0), 0),
-    spent: summary.filter((booking) => booking.seekerId === SEEKER_ID).reduce((sum, booking) => sum + booking.total, 0),
-    bookings: summary.length,
-    requests: summary.length,
-    acceptanceRate: summary.length ? summary.filter((booking) => !ACTIVE.includes(booking.status)).length / summary.length : 0,
-    utilisation: 0.42,
-  };
-  res.json({
-    from,
-    to,
-    bucket: 'day',
-    totals,
-    previous: totals,
-    series: [{ date: from, earned: totals.earned, spent: totals.spent, bookings: totals.bookings }],
-    utilisationByCategory: [],
-    heatmap: AREAS.flatMap((area) => Array.from({ length: 7 }, (_, weekday) => ({ area, weekday, requests: 0 }))),
-    topCategories: [],
-    acceptance: [{ date: from, accepted: totals.bookings, total: totals.requests, rate: totals.acceptanceRate }],
-  });
+  res.json(buildAnalyticsReport(from, to));
 });
 
 export default router;
