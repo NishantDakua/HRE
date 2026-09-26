@@ -181,8 +181,8 @@ function CategoryDonut({ distribution, total }: { distribution: Procurement['cat
   return (
     <div className="rounded-xl bg-white p-4 ring-1 ring-slate-200">
       <p className="text-sm font-semibold text-slate-900">Category Distribution</p>
-      <div className="mt-3 flex items-center gap-4">
-        <div className="relative h-32 w-32 flex-shrink-0">
+      <div className="mt-3 flex items-center gap-3">
+        <div className="relative h-24 w-24 flex-shrink-0">
           <svg viewBox="0 0 100 100" className="h-full w-full -rotate-90" role="img" aria-label="Spend by category">
             {segments.map((s, idx) => {
               const length = (s.amount / total) * circumference;
@@ -223,7 +223,7 @@ function CategoryDonut({ distribution, total }: { distribution: Procurement['cat
               onMouseLeave={() => setHover(null)}
             >
               <span className="h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ backgroundColor: s.color }} />
-              <span className="flex-1 truncate text-slate-600">{s.name}</span>
+              <span className="flex-1 truncate text-slate-600" title={s.name}>{s.name}</span>
               <span className="font-semibold text-slate-900">{s.share}%</span>
             </li>
           ))}

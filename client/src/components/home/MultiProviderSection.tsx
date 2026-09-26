@@ -17,9 +17,9 @@ export default function MultiProviderSection({ featured }: MultiProviderSectionP
 
   return (
     <section className="bg-gradient-to-b from-[#f3f7fe] to-white py-14">
-      <div className="container-wide grid items-center gap-10 lg:grid-cols-[360px_1fr]">
+      <div className="container-wide grid items-center gap-10 lg:grid-cols-[320px_1fr]">
         <div>
-          <h2 className="text-4xl font-extrabold leading-tight tracking-tight text-slate-900">
+          <h2 className="whitespace-nowrap text-[32px] font-bold leading-tight tracking-tight text-slate-900">
             One Requirement.
             <br />
             <span className="text-blue-600">Multiple Providers.</span>
@@ -43,7 +43,7 @@ export default function MultiProviderSection({ featured }: MultiProviderSectionP
         </div>
 
         <div className="relative">
-          <div className="grid items-center gap-3 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1.15fr]">
+          <div className="grid items-center gap-2.5 md:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1.5fr]">
             {(providers ?? SPLIT.map(() => null)).map((p, idx) => (
               <Fragment key={p?.id ?? idx}>
                 {p ? (
@@ -54,7 +54,7 @@ export default function MultiProviderSection({ featured }: MultiProviderSectionP
                         {initials(p.provider)}
                       </span>
                       <div className="min-w-0">
-                        <p className="truncate text-sm font-bold text-slate-900">{p.provider}</p>
+                        <p className="text-[13px] font-bold leading-tight text-slate-900">{p.provider}</p>
                         <p className="text-xs text-slate-500">{SPLIT[idx]} units</p>
                         {p.providerVerified && (
                           <p className="mt-0.5 flex items-center gap-1 text-xs font-semibold text-emerald-600">
@@ -77,9 +77,9 @@ export default function MultiProviderSection({ featured }: MultiProviderSectionP
               </Fragment>
             ))}
 
-            <div className="flex items-center gap-4 rounded-2xl bg-white p-5 shadow-lg shadow-emerald-900/5 ring-1 ring-emerald-100">
-              <CheckCircle2 size={44} className="flex-shrink-0 fill-emerald-500 text-white" />
-              <div>
+            <div className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-lg shadow-emerald-900/5 ring-1 ring-emerald-100">
+              <CheckCircle2 size={40} className="flex-shrink-0 fill-emerald-500 text-white" />
+              <div className="whitespace-nowrap">
                 <p className="text-2xl font-extrabold text-emerald-600">
                   {REQUIRED} / {REQUIRED}
                 </p>

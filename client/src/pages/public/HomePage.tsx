@@ -46,7 +46,7 @@ export default function HomePage() {
       <MultiProviderSection featured={data?.featured} />
       <HowItWorksStrip />
 
-      <section className="container-wide grid gap-8 pb-14 pt-4 lg:grid-cols-[1.15fr_1fr]">
+      <section className="container-wide grid gap-8 pb-14 pt-4 lg:grid-cols-2">
         <FeaturedResources featured={data?.featured} />
         <ProcurementPanel
           procurement={data?.procurement}

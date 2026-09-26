@@ -36,12 +36,14 @@ export default function HeroSection({ categories, stats }: HeroSectionProps) {
       <div className="container-wide relative z-10 grid items-center gap-10 pb-28 pt-6 lg:grid-cols-[1fr_600px] lg:pb-32">
         <div>
           <p className="text-xs font-bold uppercase tracking-[0.18em] text-blue-600">B2B Hospitality Resource Exchange</p>
-          <h1 className="mt-4 text-4xl font-extrabold leading-[1.08] tracking-tight text-slate-900 sm:text-5xl xl:text-[56px]">
+          <h1 className="mt-4 text-4xl font-bold leading-[1.1] tracking-tight text-slate-900 sm:text-5xl xl:text-[50px]">
             Find Hospitality
             <br />
             Resources.
             <br />
-            <span className="text-blue-600">Fulfill More.</span> Together.
+            <span className="whitespace-nowrap">
+              <span className="text-blue-600">Fulfill More.</span> Together.
+            </span>
           </h1>
           <p className="mt-5 max-w-lg text-base leading-relaxed text-slate-600">
             Connect with verified hospitality businesses, intelligently match available capacity, and coordinate
@@ -94,9 +96,9 @@ export default function HeroSection({ categories, stats }: HeroSectionProps) {
               className="absolute flex gap-2.5 rounded-xl bg-white/95 p-2 shadow-lg shadow-slate-900/10 ring-1 ring-white"
               style={{ left: x, top: y, width: CARD_W, height: CARD_H }}
             >
-              <img src={categoryImage(category, 200)} alt="" className="h-full w-16 flex-shrink-0 rounded-lg object-cover" />
+              <img src={categoryImage(category, 200)} alt="" className="h-full w-14 flex-shrink-0 rounded-lg object-cover" />
               <div className="min-w-0 py-0.5">
-                <p className="truncate text-[12px] font-bold text-slate-900">{category}</p>
+                <p className="truncate text-[11.5px] font-bold text-slate-900">{category}</p>
                 {data?.topProvider ? (
                   <>
                     <p className="truncate text-[11px] text-slate-500">{data.topProvider.name}</p>
