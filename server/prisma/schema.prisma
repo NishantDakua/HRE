@@ -1,0 +1,417 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  password      String
+  firstName     String?
+  lastName      String?
+  phoneNumber   String?
+  role          UserRole   @default(BUSINESS_OWNER)
+  businessId    String?
+  business      Business?  @relation("UserBusiness", fields: [businessId], references: [id])
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+  notifications Notification[]
+  messages      Message[]
+  sentMessages  Message[]  @relation("MessageSender")
+}
+
+enum UserRole {
+  BUSINESS_OWNER
+  ADMIN
+}
+
+model Business {
+  id                     String     @id @default(cuid())
+  name                   String
+  businessType           String
+  location               String
+  registrationNumber     String?
+  gstNumber              String?
+  uDYAMNumber            String?
+  cinNumber              String?
+  logoUrl                String?
+  coverImageUrl          String?
+  description            String?
+  contactEmail           String
+  contactPhone           String
+  website                String?
+  verificationStatus     VerificationStatus @default(UNVERIFIED)
+  verificationProvider   String?
+  verifiedAt             DateTime?
+  verificationReference  String?
+  businessCategory       String?
+  yearsInBusiness        Int?
+  employees              Int?
+  areaOfOperation        String?
+  users                  User[]     @relation("UserBusiness")
+  providerProfile        ProviderProfile?
+  resources              Resource[]
+  inventory              Inventory[]
+  requirements           Requirement[]
+  incomingNegotiations   Negotiation[] @relation("NegotiationProvider")
+  buyerNegotiations      Negotiation[] @relation("NegotiationBuyer")
+  providerBookingItems   BookingItem[] @relation("BookingItemProvider")
+  buyerBookings          Booking[]  @relation("BookingBuyer")
+  reviews                Review[]   @relation("ReviewedBusiness")
+  reviewsGiven           Review[]   @relation("ReviewAuthor")
+  payments               Payment[]
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+}
+
+enum VerificationStatus {
+  UNVERIFIED
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model ProviderProfile {
+  id                    String     @id @default(cuid())
+  businessId            String     @unique
+  business              Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  averageRating         Float      @default(0)
+  totalReviews          Int        @default(0)
+  responseTime          Int        @default(24)
+  fulfillmentRate       Float      @default(0)
+  completedTransactions Int        @default(0)
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+}
+
+model Category {
+  id          String     @id @default(cuid())
+  name        String     @unique
+  icon        String
+  description String?
+  resources   Resource[]
+  requirements Requirement[]
+  createdAt   DateTime   @default(now())
+}
+
+model Resource {
+  id                  String     @id @default(cuid())
+  businessId          String
+  business            Business   @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  categoryId          String
+  category            Category   @relation(fields: [categoryId], references: [id])
+  name                String
+  description         String
+  specifications      String?
+  quantity            Int
+  price               Float
+  unit                String
+  location            String
+  serviceArea         String?
+  minQuantity         Int        @default(1)
+  availability        String     @default("AVAILABLE")
+  terms               String?
+  images              ResourceImage[]
+  inventory           Inventory[]
+  requirementItems    RequirementItem[]
+  matchItems          MatchItem[]
+  bookingItems        BookingItem[]
+  reviews             Review[]
+  createdAt           DateTime   @default(now())
+  updatedAt           DateTime   @updatedAt
+
+  @@index([businessId])
+  @@index([categoryId])
+}
+
+model ResourceImage {
+  id         String   @id @default(cuid())
+  resourceId String
+  resource   Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  imageUrl   String
+  isPrimary  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+}
+
+model Inventory {
+  id          String   @id @default(cuid())
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  resourceId  String
+  resource    Resource @relation(fields: [resourceId], references: [id], onDelete: Cascade)
+  reserved    Int      @default(0)
+  available   Int
+  lastUpdated DateTime @updatedAt
+
+  @@unique([businessId, resourceId])
+}
+
+model Requirement {
+  id              String     @id @default(cuid())
+  buyerId         String
+  buyer           Business   @relation(fields: [buyerId], references: [id], onDelete: Cascade)
+  categoryId      String
+  category        Category   @relation(fields: [categoryId], references: [id])
+  title           String
+  description     String
+  location        String
+  requiredDate    DateTime
+  budgetMin       Float?
+  budgetMax       Float?
+  status          RequirementStatus @default(POSTED)
+  items           RequirementItem[]
+  matches         Match[]
+  negotiations    Negotiation[]
+  bookings        Booking[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([buyerId])
+  @@index([categoryId])
+}
+
+enum RequirementStatus {
+  POSTED
+  MATCHING
+  MATCHED
+  BOOKED
+  COMPLETED
+  CANCELLED
+}
+
+model RequirementItem {
+  id            String      @id @default(cuid())
+  requirementId String
+  requirement   Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  resourceId    String
+  resource      Resource    @relation(fields: [resourceId], references: [id])
+  quantity      Int
+  createdAt     DateTime    @default(now())
+
+  @@index([requirementId])
+}
+
+model Match {
+  id              String     @id @default(cuid())
+  requirementId   String
+  requirement     Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  status          MatchStatus @default(ACTIVE)
+  totalQuantity   Int
+  requiredQuantity Int
+  items           MatchItem[]
+  confidence      Float      @default(0)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([requirementId])
+}
+
+enum MatchStatus {
+  ACTIVE
+  ACCEPTED
+  REJECTED
+  COMPLETED
+}
+
+model MatchItem {
+  id         String   @id @default(cuid())
+  matchId    String
+  match      Match    @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  resourceId String
+  resource   Resource @relation(fields: [resourceId], references: [id])
+  providerId String
+  quantity   Int
+  price      Float
+  createdAt  DateTime @default(now())
+
+  @@index([matchId])
+}
+
+model Negotiation {
+  id              String     @id @default(cuid())
+  requirementId   String
+  requirement     Requirement @relation(fields: [requirementId], references: [id], onDelete: Cascade)
+  providerId      String
+  provider        Business   @relation("NegotiationProvider", fields: [providerId], references: [id])
+  buyerId         String
+  buyer           Business   @relation("NegotiationBuyer", fields: [buyerId], references: [id])
+  status          NegotiationStatus @default(PENDING)
+  quantity        Int
+  currentPrice    Float
+  offeredPrice    Float?
+  messages        NegotiationMessage[]
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  @@index([requirementId])
+  @@index([providerId])
+  @@index([buyerId])
+}
+
+enum NegotiationStatus {
+  PENDING
+  NEGOTIATING
+  ACCEPTED
+  REJECTED
+  EXPIRED
+}
+
+model NegotiationMessage {
+  id            String      @id @default(cuid())
+  negotiationId String
+  negotiation   Negotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
+  senderId      String
+  message       String
+  messageType   String      @default("TEXT")
+  createdAt     DateTime    @default(now())
+
+  @@index([negotiationId])
+}
+
+model Booking {
+  id          String       @id @default(cuid())
+  buyerId     String
+  buyer       Business     @relation("BookingBuyer", fields: [buyerId], references: [id])
+  requirementId String
+  requirement Requirement  @relation(fields: [requirementId], references: [id])
+  status      BookingStatus @default(CONFIRMED)
+  totalAmount Float
+  items       BookingItem[]
+  fulfillment Fulfillment?
+  payment     Payment?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  @@index([buyerId])
+  @@index([requirementId])
+}
+
+enum BookingStatus {
+  CONFIRMED
+  CANCELLED
+  COMPLETED
+}
+
+model BookingItem {
+  id                  String   @id @default(cuid())
+  bookingId           String
+  booking             Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  providerId          String
+  provider            Business @relation("BookingItemProvider", fields: [providerId], references: [id])
+  resourceId          String
+  resource            Resource @relation(fields: [resourceId], references: [id])
+  quantity            Int
+  agreedPrice         Float
+  subtotal            Float
+  fulfillmentStatus   FulfillmentStatus @default(BOOKED)
+  paymentStatus       PaymentStatus @default(PENDING)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([bookingId])
+  @@index([providerId])
+}
+
+enum FulfillmentStatus {
+  BOOKED
+  PREPARING
+  DISPATCHED
+  IN_TRANSIT
+  DELIVERED
+  CONFIRMED
+}
+
+enum PaymentStatus {
+  PENDING
+  SECURED
+  DELIVERING
+  RELEASED
+  FAILED
+}
+
+model Fulfillment {
+  id        String   @id @default(cuid())
+  bookingId String   @unique
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  status    String   @default("IN_PROGRESS")
+  timeline  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Payment {
+  id          String   @id @default(cuid())
+  bookingId   String   @unique
+  booking     Booking  @relation(fields: [bookingId], references: [id])
+  businessId  String
+  business    Business @relation(fields: [businessId], references: [id])
+  amount      Float
+  status      PaymentStatus @default(PENDING)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([businessId])
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  relatedId String?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  senderId  String
+  sender    User     @relation("MessageSender", fields: [senderId], references: [id])
+  recipientId String
+  recipient User     @relation(fields: [recipientId], references: [id])
+  content   String
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  @@index([senderId])
+  @@index([recipientId])
+}
+
+model Review {
+  id          String   @id @default(cuid())
+  authorId    String
+  author      Business @relation("ReviewAuthor", fields: [authorId], references: [id])
+  businessId  String
+  business    Business @relation("ReviewedBusiness", fields: [businessId], references: [id])
+  resourceId  String
+  resource    Resource @relation(fields: [resourceId], references: [id])
+  rating      Float
+  comment     String?
+  createdAt   DateTime @default(now())
+
+  @@index([businessId])
+  @@index([resourceId])
+}
+
+model ContactSubmission {
+  id        String   @id @default(cuid())
+  name      String
+  business  String?
+  email     String
+  phone     String?
+  subject   String
+  message   String
+  category  String   @default("general")
+  createdAt DateTime @default(now())
+}
