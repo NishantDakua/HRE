@@ -1,6 +1,6 @@
 packages:
-  - "client"
-  - "server"
+  - client
+  - server
 
 allowBuilds:
   '@clerk/shared': true

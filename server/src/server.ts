@@ -13,7 +13,7 @@ const PORT = process.env.PORT || 5000;
 // Middleware
 app.use(clerkMiddleware());
 app.use(cors({
-  origin: process.env.CLIENT_URL || 'http://localhost:5173',
+  origin: process.env.CLIENT_URL || 'http://localhost:3100',
   credentials: true
 }));
 app.use(express.json());
@@ -26,13 +26,13 @@ app.get('/api/health', (req, res) => {
 
 // API Routes
 import authRoutes from './routes/auth.js';
-import resourceRoutes from './routes/resources.js';
 import categoryRoutes from './routes/categories.js';
 import homeRoutes from './routes/home.js';
 import newsletterRoutes from './routes/newsletter.js';
+import exchangeRoutes from './routes/exchange.js';
 
 app.use('/api/auth', authRoutes);
-app.use('/api/resources', resourceRoutes);
+app.use('/api', exchangeRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/home', homeRoutes);
 app.use('/api/newsletter', newsletterRoutes);

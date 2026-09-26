@@ -19,3 +19,5 @@ prisma/dev.db-shm
 prisma/dev.db-wal
 .next/
 out/
+test-results/
+playwright-report/

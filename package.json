@@ -3,21 +3,25 @@
   "version": "1.0.0",
   "description": "HRE - Hospitality Resource Exchange B2B Marketplace",
   "private": true,
+  "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "dev": "concurrently \"pnpm --filter hre-client dev\" \"pnpm --filter hre-server dev\"",
+    "dev": "pnpm --parallel --filter hre-client --filter hre-server dev",
     "dev:client": "pnpm --filter hre-client dev",
     "dev:server": "pnpm --filter hre-server dev",
     "build": "pnpm --filter hre-client build && pnpm --filter hre-server build",
     "build:client": "pnpm --filter hre-client build",
     "build:server": "pnpm --filter hre-server build",
     "preview": "pnpm --filter hre-client preview",
-    "type-check": "pnpm --filter hre-client type-check && pnpm --filter hre-server type-check",
+    "type-check": "pnpm -r type-check",
     "db:generate": "pnpm --filter hre-server prisma:generate",
     "db:push": "pnpm --filter hre-server prisma:push",
     "db:seed": "pnpm --filter hre-server prisma:seed",
-    "db:studio": "pnpm --filter hre-server prisma:studio"
+    "db:migrate": "pnpm --filter hre-server prisma:migrate"
   },
-  "devDependencies": {
-    "concurrently": "^8.2.0"
+  "pnpm": {
+    "overrides": {
+      "three": "0.169.0",
+      "@types/three": "0.169.0"
+    }
   }
 }

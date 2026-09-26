@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "spare-client",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["-y", "pnpm@9.15.4", "--filter", "hre-client", "dev", "--port", "3101", "--strictPort"],
+      "port": 3101
+    }
+  ]
+}
