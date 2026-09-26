@@ -3,8 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import { useAuth, useUser } from '@clerk/react';
 import PublicLayout from './layouts/PublicLayout';
-import AuthLayout from './layouts/AuthLayout';
-import ProviderLayout from './layouts/ProviderLayout';
+import DashboardLayout from './layouts/DashboardLayout';
 import OnboardingPage from './pages/public/OnboardingPage';
 
 // Public pages
@@ -22,7 +21,7 @@ import LoginPage from './pages/public/LoginPage';
 import RegisterPage from './pages/public/RegisterPage';
 import VerifyBusinessPage from './pages/public/VerifyBusinessPage';
 
-// Authenticated buyer pages
+// Dashboard pages (Buyer & Seller)
 import DashboardPage from './pages/auth/DashboardPage';
 import DiscoverPage from './pages/auth/DiscoverPage';
 import PostRequirementPage from './pages/auth/PostRequirementPage';
@@ -33,8 +32,6 @@ import NegotiationsPage from './pages/auth/NegotiationsPage';
 import BookingsPage from './pages/auth/BookingsPage';
 import BookingDetailPage from './pages/auth/BookingDetailPage';
 import FulfillmentPage from './pages/auth/FulfillmentPage';
-import MyResourcesPage from './pages/auth/MyResourcesPage';
-import AddResourcePage from './pages/auth/AddResourcePage';
 import PaymentsPage from './pages/auth/PaymentsPage';
 import NotificationsPage from './pages/auth/NotificationsPage';
 import MessagesPage from './pages/auth/MessagesPage';
@@ -57,11 +54,6 @@ import ProviderSettingsPage from './pages/provider/ProviderSettingsPage';
 const queryClient = new QueryClient();
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isSignedIn } = useAuth();
-  return isSignedIn ? <>{children}</> : <Navigate to="/login" replace />;
-}
-
-function ProviderRoute({ children }: { children: React.ReactNode }) {
   const { isSignedIn } = useAuth();
   return isSignedIn ? <>{children}</> : <Navigate to="/login" replace />;
 }
@@ -91,52 +83,42 @@ export default function App() {
           <Route path="/onboarding" element={<OnboardingPage />} />
           <Route path="/verify-business" element={<VerifyBusinessPage />} />
 
-          {/* Authenticated buyer routes */}
+          {/* Unified Dashboard Routes */}
           <Route
             element={
               <ProtectedRoute>
-                <AuthLayout />
+                <DashboardLayout />
               </ProtectedRoute>
             }
           >
+            {/* Buyer Routes */}
             <Route path="/dashboard" element={<DashboardPage />} />
-            <Route path="/discover" element={<DiscoverPage />} />
-            <Route path="/requirements" element={<RequirementsPage />} />
-            <Route path="/requirements/new" element={<PostRequirementPage />} />
-            <Route path="/requirements/:id" element={<RequirementDetailPage />} />
-            <Route path="/matches" element={<MatchesPage />} />
-            <Route path="/negotiations" element={<NegotiationsPage />} />
-            <Route path="/bookings" element={<BookingsPage />} />
-            <Route path="/bookings/:id" element={<BookingDetailPage />} />
-            <Route path="/fulfillment" element={<FulfillmentPage />} />
-            <Route path="/resources/my" element={<MyResourcesPage />} />
-            <Route path="/resources/new" element={<AddResourcePage />} />
-            <Route path="/payments" element={<PaymentsPage />} />
-            <Route path="/notifications" element={<NotificationsPage />} />
-            <Route path="/messages" element={<MessagesPage />} />
-            <Route path="/analytics" element={<AnalyticsPage />} />
-            <Route path="/business" element={<BusinessProfilePage />} />
-            <Route path="/settings" element={<SettingsPage />} />
-          </Route>
+            <Route path="/dashboard/discover" element={<DiscoverPage />} />
+            <Route path="/dashboard/requirements" element={<RequirementsPage />} />
+            <Route path="/dashboard/requirements/new" element={<PostRequirementPage />} />
+            <Route path="/dashboard/requirements/:id" element={<RequirementDetailPage />} />
+            <Route path="/dashboard/matches" element={<MatchesPage />} />
+            <Route path="/dashboard/negotiations" element={<NegotiationsPage />} />
+            <Route path="/dashboard/bookings" element={<BookingsPage />} />
+            <Route path="/dashboard/bookings/:id" element={<BookingDetailPage />} />
+            <Route path="/dashboard/fulfillment" element={<FulfillmentPage />} />
+            <Route path="/dashboard/payments" element={<PaymentsPage />} />
+            <Route path="/dashboard/notifications" element={<NotificationsPage />} />
+            <Route path="/dashboard/messages" element={<MessagesPage />} />
+            <Route path="/dashboard/analytics" element={<AnalyticsPage />} />
+            <Route path="/dashboard/business" element={<BusinessProfilePage />} />
+            <Route path="/dashboard/settings" element={<SettingsPage />} />
 
-          {/* Provider routes */}
-          <Route
-            element={
-              <ProviderRoute>
-                <ProviderLayout />
-              </ProviderRoute>
-            }
-          >
-            <Route path="/provider/dashboard" element={<ProviderDashboardPage />} />
-            <Route path="/provider/resources" element={<ProviderResourcesPage />} />
-            <Route path="/provider/requests" element={<ProviderRequestsPage />} />
-            <Route path="/provider/negotiations" element={<ProviderNegotiationsPage />} />
-            <Route path="/provider/bookings" element={<ProviderBookingsPage />} />
-            <Route path="/provider/fulfillment" element={<ProviderFulfillmentPage />} />
-            <Route path="/provider/payments" element={<ProviderPaymentsPage />} />
-            <Route path="/provider/analytics" element={<ProviderAnalyticsPage />} />
-            <Route path="/provider/business" element={<ProviderBusinessPage />} />
-            <Route path="/provider/settings" element={<ProviderSettingsPage />} />
+            {/* Seller Routes */}
+            <Route path="/dashboard/seller" element={<ProviderDashboardPage />} />
+            <Route path="/dashboard/seller/resources" element={<ProviderResourcesPage />} />
+            <Route path="/dashboard/seller/orders" element={<ProviderRequestsPage />} />
+            <Route path="/dashboard/seller/negotiations" element={<ProviderNegotiationsPage />} />
+            <Route path="/dashboard/seller/fulfillment" element={<ProviderFulfillmentPage />} />
+            <Route path="/dashboard/seller/payments" element={<ProviderPaymentsPage />} />
+            <Route path="/dashboard/seller/analytics" element={<ProviderAnalyticsPage />} />
+            <Route path="/dashboard/seller/business" element={<ProviderBusinessPage />} />
+            <Route path="/dashboard/seller/settings" element={<ProviderSettingsPage />} />
           </Route>
 
           {/* Catch-all */}
