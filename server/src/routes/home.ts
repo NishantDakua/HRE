@@ -48,7 +48,7 @@ async function procurementWindow(from: Date, to: Date) {
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const requested = Number(req.query.months);
+    const requested = Number(req.query.months) || 6;
     const months = ALLOWED_MONTHS.includes(requested) ? requested : 6;
 
     const now = new Date();

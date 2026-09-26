@@ -30,8 +30,10 @@ import categoryRoutes from './routes/categories.js';
 import homeRoutes from './routes/home.js';
 import newsletterRoutes from './routes/newsletter.js';
 import exchangeRoutes from './routes/exchange.js';
+import chatRoutes from './routes/chat.js';
 
 app.use('/api/auth', authRoutes);
+app.use('/api/chat', chatRoutes);
 app.use('/api', exchangeRoutes);
 app.use('/api/categories', categoryRoutes);
 app.use('/api/home', homeRoutes);
