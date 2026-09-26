@@ -424,3 +424,133 @@ model ContactSubmission {
   category  String   @default("general")
   createdAt DateTime @default(now())
 }
+
+// Spare exchange — shape matches the Abhishek frontend API.
+
+model ExchangeBusiness {
+  id              String   @id
+  name            String
+  type            String
+  area            String
+  address         String
+  lat             Float
+  lng             Float
+  rating          Float
+  reviewCount     Int
+  responseRate    Float
+  avgResponseMins Int
+  fulfillmentRate Float
+  verified        Boolean
+  joinedAt        DateTime
+  listings        ExchangeListing[]
+  seekerBookings  ExchangeBooking[] @relation("SeekerBookings")
+}
+
+model ExchangeListing {
+  id             String   @id
+  businessId     String
+  business       ExchangeBusiness @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  title          String
+  category       String
+  description    String
+  price          Float
+  unit           String
+  quantity       Int
+  available      Int
+  unitLabel      String
+  minRentalHours Int
+  capacity       Int?
+  tags           String[]
+  delivers       Boolean
+  deliveryBase   Float?
+  deliveryPerKm  Float?
+  status         String   @default("ACTIVE")
+  conditions     String[]
+  cancellation   String?
+  deposit        Float?
+  items          ExchangeBookingItem[]
+
+  @@index([businessId])
+  @@index([category])
+}
+
+model ExchangeBooking {
+  id        String   @id
+  ref       String   @unique
+  seekerId  String
+  seeker    ExchangeBusiness @relation("SeekerBookings", fields: [seekerId], references: [id])
+  title     String
+  status    String
+  startAt   DateTime
+  endAt     DateTime
+  total     Float
+  urgent    Boolean  @default(false)
+  note      String?
+  createdAt DateTime
+  items     ExchangeBookingItem[]
+  offers    ExchangeOffer[]
+  reviews   ExchangeReview[]
+
+  @@index([seekerId])
+  @@index([status])
+}
+
+model ExchangeBookingItem {
+  id          String          @id @default(cuid())
+  bookingId   String
+  booking     ExchangeBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  resourceId  String
+  resource    ExchangeListing @relation(fields: [resourceId], references: [id])
+  providerId  String
+  quantity    Int
+  agreedPrice Float
+
+  @@index([bookingId])
+  @@index([providerId])
+  @@index([resourceId])
+}
+
+model ExchangeOffer {
+  id             String          @id
+  bookingId      String
+  booking        ExchangeBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  resourceId     String
+  fromBusinessId String
+  toBusinessId   String
+  round          Int
+  price          Float
+  quantity       Int
+  message        String
+  status         String
+  createdAt      DateTime
+  expiresAt      DateTime
+
+  @@index([bookingId])
+}
+
+model ExchangeReview {
+  id           String          @id @default(cuid())
+  bookingId    String
+  booking      ExchangeBooking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  byBusinessId String
+  rating       Int
+  text         String
+  tags         String[]
+  createdAt    DateTime
+}
+
+model ExchangeNotification {
+  id        String   @id
+  title     String
+  body      String
+  createdAt DateTime
+  read      Boolean  @default(false)
+}
+
+model ExchangeSavedSearch {
+  id         String   @id
+  name       String
+  query      String
+  createdAt  DateTime
+  newMatches Int
+}
