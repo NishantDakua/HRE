@@ -9,8 +9,14 @@
     "dev:client": "pnpm --filter hre-client dev",
     "dev:server": "pnpm --filter hre-server dev",
     "build": "pnpm --filter hre-client build && pnpm --filter hre-server build",
+    "build:client": "pnpm --filter hre-client build",
+    "build:server": "pnpm --filter hre-server build",
     "preview": "pnpm --filter hre-client preview",
-    "type-check": "pnpm -r type-check"
+    "type-check": "pnpm -r type-check",
+    "db:generate": "pnpm --filter hre-server prisma:generate",
+    "db:push": "pnpm --filter hre-server prisma:push",
+    "db:seed": "pnpm --filter hre-server prisma:seed",
+    "db:migrate": "pnpm --filter hre-server prisma:migrate"
   },
   "pnpm": {
     "overrides": {

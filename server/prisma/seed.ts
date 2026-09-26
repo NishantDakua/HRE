@@ -1,3 +1,6 @@
+import dotenv from 'dotenv';
+dotenv.config();
+
 import { PrismaClient, VerificationStatus, FulfillmentStatus, PaymentStatus, Resource } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -98,16 +101,8 @@ async function main() {
       contactPhone: '+91-22-1234-5678',
       description: 'Luxury 5-star hotel in downtown Mumbai',
       verificationStatus: VerificationStatus.VERIFIED,
-      verificationProvider: 'mock-entitylocker',
-      verifiedAt: new Date(),
-      users: {
-        create: {
-          email: 'buyer@hotelsunrise.com',
-          password: await bcrypt.hash('demo123', 10),
-          firstName: 'Rajesh',
-          lastName: 'Patel'
-        }
-      }
+
+      verifiedAt: new Date()
     }
   });
 
@@ -121,8 +116,8 @@ async function main() {
       contactPhone: '+91-11-8765-4321',
       description: 'Professional event management and coordination',
       verificationStatus: VerificationStatus.VERIFIED,
-      verificationProvider: 'mock-entitylocker',
-      verifiedAt: new Date(),
+
+
       providerProfile: {
         create: {
           averageRating: 4.7,
@@ -146,8 +141,8 @@ async function main() {
       contactPhone: '+91-22-5555-5555',
       description: 'Premium catering services for events',
       verificationStatus: VerificationStatus.VERIFIED,
-      verificationProvider: 'mock-entitylocker',
-      verifiedAt: new Date(),
+
+
       providerProfile: {
         create: {
           averageRating: 4.8,
@@ -170,8 +165,8 @@ async function main() {
       contactPhone: '+91-22-4444-4444',
       description: 'Beautiful banquet spaces for corporate and social events',
       verificationStatus: VerificationStatus.VERIFIED,
-      verificationProvider: 'mock-entitylocker',
-      verifiedAt: new Date(),
+
+
       providerProfile: {
         create: {
           averageRating: 4.7,
@@ -194,8 +189,8 @@ async function main() {
       contactPhone: '+91-80-3333-3333',
       description: 'Equipment rental and hospitality solutions',
       verificationStatus: VerificationStatus.VERIFIED,
-      verificationProvider: 'mock-entitylocker',
-      verifiedAt: new Date(),
+
+
       providerProfile: {
         create: {
           averageRating: 4.6,
@@ -218,8 +213,8 @@ async function main() {
       contactPhone: '+91-80-2222-2222',
       description: 'Professional staffing and event management',
       verificationStatus: VerificationStatus.VERIFIED,
-      verificationProvider: 'mock-entitylocker',
-      verifiedAt: new Date(),
+
+
       providerProfile: {
         create: {
           averageRating: 4.9,
@@ -242,8 +237,8 @@ async function main() {
       contactPhone: '+91-22-6666-6666',
       description: 'Vans, trucks and refrigerated delivery for events',
       verificationStatus: VerificationStatus.VERIFIED,
-      verificationProvider: 'mock-entitylocker',
-      verifiedAt: new Date(),
+
+
       providerProfile: {
         create: {
           averageRating: 4.5,
