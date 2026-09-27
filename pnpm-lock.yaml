@@ -10,7 +10,14 @@ overrides:
 
 importers:
 
-  .: {}
+  .:
+    dependencies:
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
+      zxing-wasm:
+        specifier: ^3.1.4
+        version: 3.1.4(@types/emscripten@1.41.6)
 
   client:
     dependencies:

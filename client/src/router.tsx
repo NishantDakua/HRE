@@ -5,6 +5,7 @@ import { RootLayout } from "@/layouts/RootLayout";
 import AnalyticsPage from "@/pages/Analytics";
 import ContractPage from "@/pages/Contract";
 import DashboardPage from "@/pages/Dashboard";
+import DigitalTwinPage from "@/pages/DigitalTwin";
 import HandoverPage from "@/pages/Handover";
 import LabelsPage from "@/pages/Labels";
 import DiscoverPage from "@/pages/Discover";
@@ -30,6 +31,7 @@ export const router = createBrowserRouter([
             element: <ProtectedRoute />,
             children: [
               { path: "dashboard", element: <DashboardPage /> },
+              { path: "digital-twin", element: <DigitalTwinPage /> },
               { path: "requests", element: <RequestsPage /> },
               { path: "analytics", element: <AnalyticsPage /> },
               { path: "contract/:id", element: <ContractPage /> },

@@ -14,6 +14,33 @@ declare global {
   }
 }
 
+/**
+ * Find the HRE User linked to a Clerk identity, creating one from Clerk's
+ * profile data on first sight. Shared by the auth middleware and anywhere
+ * else (e.g. the chat assistant) that needs a real User.id from a Clerk
+ * userId, so there's exactly one place this find-or-create logic lives.
+ */
+export const findOrCreateHREUser = async (clerkUserId: string) => {
+  const existing = await prisma.user.findUnique({
+    where: { clerkUserId },
+    include: { business: true },
+  });
+  if (existing) return existing;
+
+  const clerkUser = await clerkClient.users.getUser(clerkUserId);
+  return prisma.user.create({
+    data: {
+      clerkUserId,
+      email: clerkUser.emailAddresses[0]?.emailAddress || '',
+      firstName: clerkUser.firstName || undefined,
+      lastName: clerkUser.lastName || undefined,
+      role: 'USER',
+      hreRole: 'SEEKER',
+    },
+    include: { business: true },
+  });
+};
+
 export const authenticateRequest = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const clerkUserId = req.auth?.userId;
@@ -23,29 +50,7 @@ export const authenticateRequest = async (req: Request, res: Response, next: Nex
     }
 
     req.clerkUserId = clerkUserId;
-
-    // Find or create HRE user
-    let user = await prisma.user.findUnique({
-      where: { clerkUserId },
-      include: { business: true },
-    });
-
-    if (!user) {
-      // Create user from Clerk data
-      const clerkUser = await clerkClient.users.getUser(clerkUserId);
-
-      user = await prisma.user.create({
-        data: {
-          clerkUserId,
-          email: clerkUser.emailAddresses[0]?.emailAddress || '',
-          firstName: clerkUser.firstName || undefined,
-          lastName: clerkUser.lastName || undefined,
-          role: 'USER',
-          hreRole: 'SEEKER',
-        },
-        include: { business: true },
-      });
-    }
+    const user = await findOrCreateHREUser(clerkUserId);
 
     req.user = user;
     req.userId = user.id;

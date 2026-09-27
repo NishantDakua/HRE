@@ -38,9 +38,11 @@ import newsletterRoutes from './routes/newsletter.js';
 import exchangeRoutes from './routes/exchange.js';
 import contractRoutes from './routes/contracts.js';
 import chatRoutes from './routes/chat.js';
+import digitalTwinRoutes from './routes/digitalTwin.js';
 
 app.use('/api/auth', authRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/digital-twin', digitalTwinRoutes);
 app.use('/api', exchangeRoutes);
 app.use('/api', contractRoutes);
 app.use('/api/categories', categoryRoutes);

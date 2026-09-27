@@ -14,6 +14,9 @@ import {
   type CreateBookingInput,
   type RespondInput,
 } from './exchange.js';
+import { findOrCreateHREUser } from '../middleware/auth.js';
+import { getCurrentWeather } from './digitalTwin/weatherService.js';
+import { runSimulation } from './digitalTwin/simulationService.js';
 
 const AI_SERVICE_URL = process.env.AI_SERVICE_URL ?? 'http://localhost:8008';
 const LLM_TIMEOUT_MS = 180_000;
@@ -123,6 +126,11 @@ How to help a provider:
 
 Seekers can also check on their own requests with list_bookings (role "seeker") and respond to a provider's counter-offer with propose_offer_response.
 
+Weather & Digital Twin (separate from the marketplace above):
+- If the user asks about weather, or a "what if it rains / storms / gets hot" question, call get_current_weather first to ground your answer in real current conditions for that city.
+- To answer "what happens to fulfillment if weather changes", call run_weather_simulation with the hypothetical rainfall/temperature/wind they described (reasonable defaults if they only mention one thing, e.g. just "heavy rain" → rainfall 80). This is a READ-ONLY projection — it never touches real bookings, inventory, or payments. Say plainly that the numbers are simulated/projected, not something that has actually happened.
+- Report the projected fulfillment %, which providers are at highest risk, and how many units are at risk. If risk is high, you may suggest checking the marketplace for alternative providers via search_resources — but don't book anything automatically.
+
 Rules for tools:
 - Only use resourceId and bookingId values that appeared in a tool result or in the user's message. Never make one up; search first if you don't have it.
 - When the user taps Book on a card, their message names the listing and its id — reuse the time window and quantity from the search unless they say otherwise.
@@ -174,6 +182,29 @@ const ProposeResponseInput = z.object({
   action: z.preprocess((v) => (typeof v === 'string' ? v.toLowerCase() : v), z.enum(['accept', 'reject', 'counter'])),
   price: optional(rupees),
   message: optional(z.string().max(200)),
+});
+
+// Cities the Digital Twin tools know coordinates for — matches the picker on
+// the /digital-twin page so a chat query and the page agree on the same spot.
+const WEATHER_CITIES: Record<string, { lat: number; lng: number }> = {
+  thane: { lat: 19.2183, lng: 72.9781 },
+  mumbai: { lat: 19.076, lng: 72.8777 },
+  pune: { lat: 18.5204, lng: 73.8567 },
+  delhi: { lat: 28.6139, lng: 77.209 },
+  bengaluru: { lat: 12.9716, lng: 77.5946 },
+  bangalore: { lat: 12.9716, lng: 77.5946 },
+  chennai: { lat: 13.0827, lng: 80.2707 },
+  kolkata: { lat: 22.5726, lng: 88.3639 },
+};
+const cityCoords = (location: string) => WEATHER_CITIES[location.trim().toLowerCase()] ?? WEATHER_CITIES.thane;
+
+const GetWeatherInput = z.object({ location: z.string().min(1) });
+const RunWeatherSimulationInput = z.object({
+  location: z.string().min(1),
+  rainfall: z.coerce.number().min(0).max(500),
+  stormDuration: optional(z.coerce.number().min(0).max(24)),
+  temperature: z.coerce.number().min(-50).max(60),
+  windSpeed: z.coerce.number().min(0).max(200),
 });
 
 const isoProp = (description: string) => ({ type: 'string', description: `${description}, local time as YYYY-MM-DDTHH:MM, e.g. 2026-10-03T18:00` });
@@ -246,6 +277,31 @@ const TOOL_SPECS: ToolSpec[] = [
       required: ['bookingId', 'action'],
     },
   },
+  {
+    name: 'get_current_weather',
+    description: 'Get live current weather for a city (Digital Twin data, separate from the marketplace). Use this before answering any weather question.',
+    parameters: {
+      type: 'object',
+      properties: { location: { type: 'string', description: 'City name, e.g. "Thane", "Mumbai", "Pune"' } },
+      required: ['location'],
+    },
+  },
+  {
+    name: 'run_weather_simulation',
+    description:
+      'Run a read-only Digital Twin what-if simulation: given a hypothetical rainfall/temperature/wind scenario for a city, project the effect on fulfillment. This NEVER touches real bookings, inventory, or payments — it only produces a projection.',
+    parameters: {
+      type: 'object',
+      properties: {
+        location: { type: 'string', description: 'City name, e.g. "Thane"' },
+        rainfall: { type: 'number', description: 'Hypothetical rainfall in mm (0-500)' },
+        stormDuration: { type: 'number', description: 'Hypothetical storm duration in hours (0-24)' },
+        temperature: { type: 'number', description: 'Hypothetical temperature in Celsius' },
+        windSpeed: { type: 'number', description: 'Hypothetical wind speed in km/h' },
+      },
+      required: ['location', 'rainfall', 'temperature', 'windSpeed'],
+    },
+  },
 ];
 
 const TOOLS = TOOL_SPECS.map((function_) => ({ type: 'function', function: function_ }));
@@ -292,7 +348,7 @@ interface ToolOutcome {
   block?: UIBlock;
 }
 
-async function runTool(name: string, raw: unknown, session: Session, mode: Mode, businessId: string): Promise<ToolOutcome> {
+async function runTool(name: string, raw: unknown, session: Session, mode: Mode, businessId: string, clerkUserId?: string): Promise<ToolOutcome> {
   switch (name) {
     case 'search_resources': {
       const input = SearchInput.parse(raw);
@@ -400,6 +456,36 @@ async function runTool(name: string, raw: unknown, session: Session, mode: Mode,
       return { content: 'Confirm card shown. Wait for the user\'s decision.', block: { type: 'confirm', action: card } };
     }
 
+    case 'get_current_weather': {
+      const input = GetWeatherInput.parse(raw);
+      const { lat, lng } = cityCoords(input.location);
+      const weather = await getCurrentWeather(lat, lng, input.location);
+      return { content: JSON.stringify(weather) };
+    }
+
+    case 'run_weather_simulation': {
+      if (!clerkUserId) return { content: 'No signed-in user to run the simulation for.', isError: true };
+      const input = RunWeatherSimulationInput.parse(raw);
+      const { lat, lng } = cityCoords(input.location);
+      const user = await findOrCreateHREUser(clerkUserId);
+      // No specific Requirement is selected from chat, so this always uses
+      // the Digital Twin's built-in demo scenario (falls back automatically
+      // when requirementId doesn't match a real row) — still fully isolated
+      // from real bookings/inventory either way.
+      const sim = await runSimulation({
+        userId: user.id,
+        requirementId: 'demo-requirement',
+        rainfall: input.rainfall,
+        stormDuration: input.stormDuration ?? 0,
+        temperature: input.temperature,
+        windSpeed: input.windSpeed,
+        location: input.location,
+        latitude: lat,
+        longitude: lng,
+      });
+      return { content: JSON.stringify(sim) };
+    }
+
     default:
       return { content: `Unknown tool ${name}`, isError: true };
   }
@@ -475,7 +561,7 @@ function contextTag(mode: Mode) {
 const CARD_ONLY_TOOLS = new Set(['propose_booking', 'propose_offer_response']);
 const CARD_ONLY_REPLY = 'Check the details and tap Confirm to send it, or tell me what to change.';
 
-export async function chat(session: Session, userText: string, mode: Mode, emit: Emit, businessId: string): Promise<void> {
+export async function chat(session: Session, userText: string, mode: Mode, emit: Emit, businessId: string, clerkUserId?: string): Promise<void> {
   const checkpoint = session.messages.length;
   session.messages.push({ role: 'user', content: `${contextTag(mode)}\n${userText}` });
 
@@ -494,7 +580,7 @@ export async function chat(session: Session, userText: string, mode: Mode, emit:
       for (const call of reply.toolCalls) {
         let outcome: ToolOutcome;
         try {
-          outcome = await runTool(call.name, call.arguments, session, mode, businessId);
+          outcome = await runTool(call.name, call.arguments, session, mode, businessId, clerkUserId);
         } catch (error) {
           outcome = {
             content: error instanceof z.ZodError ? `Invalid input: ${error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; ')}` : 'Tool failed; tell the user something went wrong and try again.',

@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { getAuth } from '@clerk/express';
 import { z } from 'zod';
 import { LLMUnavailableError, chat, getSession, resolveAction } from '../services/assistant.js';
 import { actorBusiness } from './exchange.js';
@@ -25,6 +26,9 @@ router.post('/', async (req, res) => {
   const actor = await actorBusiness(req);
   if (!actor) return res.status(401).json({ error: 'Sign in required' });
   const { id, session } = getSession(body.data.sessionId);
+  // Digital Twin tools (weather/simulation) key off the real HRE User, not
+  // the Exchange demo business — resolve it from the same Clerk session.
+  const clerkUserId = getAuth(req).userId ?? undefined;
 
   res.setHeader('Content-Type', 'application/x-ndjson; charset=utf-8');
   res.setHeader('Cache-Control', 'no-cache');
@@ -32,7 +36,7 @@ router.post('/', async (req, res) => {
   const send = (payload: object) => res.write(`${JSON.stringify(payload)}\n`);
   send({ event: 'session', sessionId: id });
   try {
-    await chat(session, body.data.message, body.data.mode, send, actor.id);
+    await chat(session, body.data.message, body.data.mode, send, actor.id, clerkUserId);
     send({ event: 'done' });
   } catch (error) {
     if (error instanceof LLMUnavailableError) {
