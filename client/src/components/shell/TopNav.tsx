@@ -14,6 +14,7 @@ const NAV = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/requests", label: "Requests" },
   { href: "/analytics", label: "Analytics" },
+  { href: "/digital-twin", label: "Digital Twin" },
 ];
 
 const ROLES: { value: Role; label: string }[] = [

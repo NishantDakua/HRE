@@ -28,6 +28,7 @@ model User {
   notifications Notification[]
   messages      Message[]
   sentMessages  Message[]  @relation("MessageSender")
+  simulationScenarios SimulationScenario[] @relation("ScenarioUser")
 }
 
 enum UserRole {
@@ -179,6 +180,7 @@ model Requirement {
   matches         Match[]
   negotiations    Negotiation[]
   bookings        Booking[]
+  scenarios       SimulationScenario[] @relation("ScenarioRequirement")
   createdAt       DateTime   @default(now())
   updatedAt       DateTime   @updatedAt
 
@@ -692,3 +694,123 @@ model ExchangeSavedSearch {
 
   @@index([businessId])
 }
+
+// ============================================
+// DIGITAL TWIN MODELS (Weather-Driven)
+// ============================================
+
+// Live weather observation (cached)
+model WeatherObservation {
+  id            String   @id @default(cuid())
+  latitude      Float
+  longitude     Float
+  location      String
+  temperature   Float    // Celsius
+  humidity      Int      // 0-100
+  rainfall      Float    // mm
+  windSpeed     Float    // km/h
+  windGust      Float?
+  weatherCondition String
+  visibility    Int?     // meters
+  cloudCover    Int?     // 0-100
+  source        String   // "openweather", "mock", etc.
+  timestamp     DateTime
+  createdAt     DateTime @default(now())
+
+  @@index([location])
+  @@index([timestamp])
+}
+
+// User's what-if simulation parameters
+model SimulationScenario {
+  id            String   @id @default(cuid())
+  userId        String
+  user          User     @relation("ScenarioUser", fields: [userId], references: [id], onDelete: Cascade)
+
+  // Reference to real HRE data
+  requirementId String?
+  requirement   Requirement? @relation("ScenarioRequirement", fields: [requirementId], references: [id], onDelete: SetNull)
+
+  // Scenario parameters (what-if variables)
+  rainfall      Float    // mm
+  stormDuration Int      // hours
+  temperature   Float    // Celsius
+  windSpeed     Float    // km/h
+
+  // Baseline for comparison
+  baselineWeather Json   // Cached baseline weather at creation time
+
+  // Metadata
+  name          String?
+  description   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relation to results
+  result        SimulationResult?
+
+  @@index([userId])
+  @@index([requirementId])
+}
+
+// Simulation result (output)
+model SimulationResult {
+  id            String   @id @default(cuid())
+  scenarioId    String   @unique
+  scenario      SimulationScenario @relation(fields: [scenarioId], references: [id], onDelete: Cascade)
+
+  // Real vs projected fulfillment
+  baselineFulfillmentPercent Float   // 100 if all units available
+  projectedFulfillmentPercent Float  // After simulation
+
+  // Impact summary
+  affectedProviders Json   // [{ providerId, risk: "HIGH"|"MEDIUM"|"LOW" }]
+  affectedResources Json   // [{ resourceId, riskPercent }]
+
+  // At-risk units
+  totalRequiredUnits Int
+  projectedDeliveredUnits Int
+  unitsAtRisk Int
+
+  // Risk assessment
+  logisticsRisk String   // "LOW" | "MEDIUM" | "HIGH"
+  fulfillmentRisk String // "LOW" | "MEDIUM" | "HIGH"
+
+  // Impact chain
+  impacts       ImpactEvent[]
+
+  // Metadata
+  computedAt    DateTime @default(now())
+  confidence    Float    @default(0.7) // 0-1 confidence in projection
+
+  @@index([scenarioId])
+}
+
+// Individual impact event in propagation chain
+model ImpactEvent {
+  id            String   @id @default(cuid())
+  resultId      String
+  result        SimulationResult @relation(fields: [resultId], references: [id], onDelete: Cascade)
+
+  // What is affected
+  affectedEntityType String  // "WEATHER" | "LOGISTICS" | "PROVIDER" | "RESOURCE" | "FULFILLMENT"
+  affectedEntityId String?   // providerId, resourceId, etc.
+  affectedEntityName String  // Display name
+
+  // Impact details
+  impactType    String   // "DELIVERY_DELAY" | "CAPACITY_REDUCTION" | "UNAVAILABILITY" | etc.
+  severity      String   // "LOW" | "MEDIUM" | "HIGH"
+  probability   Float    // 0-1
+
+  // Propagation
+  reason        String   // Human-readable explanation
+  source        String   // What caused this (e.g., "HEAVY_RAIN")
+  downstreamImpactIds String[] // IDs of impacts this caused
+
+  // Metadata
+  createdAt     DateTime @default(now())
+
+  @@index([resultId])
+  @@index([affectedEntityType])
+}
+

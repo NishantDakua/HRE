@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { BarChart3, Home, Inbox, LayoutDashboard, LogIn, MoreHorizontal, PlusCircle, Search, X, type LucideIcon } from "lucide-react";
+import { BarChart3, CloudSun, Home, Inbox, LayoutDashboard, LogIn, MoreHorizontal, PlusCircle, Search, X, type LucideIcon } from "lucide-react";
 import { AUTH_ENABLED } from "@/components/auth";
 import { SignedOut } from "@clerk/clerk-react";
 import { cn } from "@/lib/utils";
@@ -41,7 +41,7 @@ export function BottomTabBar() {
     return () => window.removeEventListener("keydown", onKey);
   }, [more]);
 
-  const moreActive = more || (pathname === "/requests" && search.includes("new=1"));
+  const moreActive = more || (pathname === "/requests" && search.includes("new=1")) || pathname === "/digital-twin";
 
   return (
     <>
@@ -79,6 +79,9 @@ export function BottomTabBar() {
                 <RoleSwitch />
               </div>
               <nav className="grid gap-0.5" aria-label="More">
+                <MoreLink to="/digital-twin" icon={CloudSun} onClick={() => setMore(false)}>
+                  Digital Twin
+                </MoreLink>
                 <MoreLink to="/requests?new=1" icon={PlusCircle} onClick={() => setMore(false)}>
                   Post a need
                 </MoreLink>

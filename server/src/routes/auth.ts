@@ -75,13 +75,13 @@ router.post('/onboarding', authenticateRequest, async (req: Request, res: Respon
       include: { business: true }
     });
 
-    // If provider, create provider profile
-    if ((hreRole === 'PROVIDER' || hreRole === 'BOTH') && !business.providerProfile) {
-      await prisma.providerProfile.create({
-        data: {
-          businessId: business.id,
-        }
-      });
+    if (hreRole === 'PROVIDER' || hreRole === 'BOTH') {
+      const profile = await prisma.providerProfile.findUnique({ where: { businessId: business.id } });
+      if (!profile) {
+        await prisma.providerProfile.create({
+          data: { businessId: business.id },
+        });
+      }
     }
 
     res.json({
