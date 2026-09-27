@@ -142,7 +142,19 @@ export function useUpdateResource() {
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey: queryKeys.myResources() });
       const previous = qc.getQueryData<MyResource[]>(queryKeys.myResources());
-      qc.setQueryData<MyResource[]>(queryKeys.myResources(), (old) => old?.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+      qc.setQueryData<MyResource[]>(queryKeys.myResources(), (old) =>
+        old?.map((r) => {
+          if (r.id !== id) return r;
+          const { photos, ...rest } = patch;
+          return {
+            ...r,
+            ...rest,
+            ...(photos
+              ? { photos: photos.map((photo) => ({ position: photo.position, url: photo.dataUrl })) }
+              : {}),
+          };
+        }),
+      );
       return { previous };
     },
     onError: (e, _input, ctx) => {
