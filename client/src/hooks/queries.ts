@@ -2,7 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tansta
 import { toast } from "sonner";
 import { api, apiErrorMessage, asConflict } from "@/lib/api";
 import { applyResponse } from "@/lib/bookings";
-import * as mock from "@/lib/mockApi";
+import { useApiGate } from "@/hooks/account";
 import type {
   AnalyticsRange,
   AnalyticsReport,
@@ -29,13 +29,6 @@ import type {
   HandoverContract,
 } from "@/lib/types";
 
-const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
-
-/** Serve mock data (400ms delay) or call the API. */
-function source<T>(fromMock: () => Promise<T>, fromApi: () => Promise<T>): Promise<T> {
-  return USE_MOCK ? fromMock() : fromApi();
-}
-
 const data = <T,>(p: Promise<{ data: T }>) => p.then((r) => r.data);
 
 export const queryKeys = {
@@ -58,49 +51,39 @@ export const queryKeys = {
 /* ------------------------------------------------------------------ */
 
 export function useResources(filters: ResourceFilters = {}) {
+  const { publicReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.resources(filters),
-    queryFn: () =>
-      source(
-        () => mock.getResources(filters),
-        () => data(api.get<ResourceWithBusiness[]>("/resources", { params: filters }))
-      ),
+    queryFn: () => data(api.get<ResourceWithBusiness[]>("/resources", { params: filters })),
     placeholderData: keepPreviousData,
+    enabled: publicReady,
   });
 }
 
 export function useResource(id: string | undefined) {
+  const { publicReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.resource(id ?? ""),
-    queryFn: () =>
-      source(
-        () => mock.getResource(id!),
-        () => data(api.get<ResourceWithBusiness>(`/resources/${id}`))
-      ),
-    enabled: !!id,
+    queryFn: () => data(api.get<ResourceWithBusiness>(`/resources/${id}`)),
+    enabled: publicReady && !!id,
   });
 }
 
 export function useAvailability(resourceId: string | undefined) {
+  const { publicReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.availability(resourceId ?? ""),
-    queryFn: () =>
-      source(
-        () => mock.getAvailability(resourceId!),
-        () => data(api.get<Availability>(`/resources/${resourceId}/availability`))
-      ),
-    enabled: !!resourceId,
+    queryFn: () => data(api.get<Availability>(`/resources/${resourceId}/availability`)),
+    enabled: publicReady && !!resourceId,
   });
 }
 
 export function useMyResources() {
+  const { privateReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.myResources(),
-    queryFn: () =>
-      source(
-        () => mock.getMyResources(),
-        () => data(api.get<MyResource[]>("/resources/mine"))
-      ),
+    queryFn: () => data(api.get<MyResource[]>("/resources/mine")),
+    enabled: privateReady,
   });
 }
 
@@ -115,11 +98,7 @@ function invalidateListings(qc: ReturnType<typeof useQueryClient>, id?: string) 
 export function useCreateResource() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateResourceInput) =>
-      source(
-        () => mock.createResource(input),
-        () => data(api.post<ResourceWithBusiness>("/resources", input))
-      ),
+    mutationFn: (input: CreateResourceInput) => data(api.post<ResourceWithBusiness>("/resources", input)),
     onSuccess: (r) => {
       invalidateListings(qc, r.id);
       toast.success("Listing published", { description: r.title });
@@ -131,16 +110,12 @@ export function useCreateResource() {
 export function useUpdateResource() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: UpdateResourceInput) =>
-      source(
-        () => mock.updateResource(input),
-        () => data(api.patch<ResourceWithBusiness>(`/resources/${input.id}`, input.patch))
-      ),
+    mutationFn: (input: UpdateResourceInput) => data(api.patch<ResourceWithBusiness>(`/resources/${input.id}`, input.patch)),
     // Optimistic: status toggles and edits show immediately in "My listings".
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey: queryKeys.myResources() });
       const previous = qc.getQueryData<MyResource[]>(queryKeys.myResources());
-      qc.setQueryData<MyResource[]>(queryKeys.myResources(), (old) => old?.map((r) => (r.id === id ? { ...r, ...patch } : r)));
+      qc.setQueryData<MyResource[]>(queryKeys.myResources(), (old) => old?.map((r) => (r.id === id ? ({ ...r, ...patch } as MyResource) : r)));
       return { previous };
     },
     onError: (e, _input, ctx) => {
@@ -162,14 +137,11 @@ export function useUpdateResource() {
 /* ------------------------------------------------------------------ */
 
 export function useMatches(requirement: Requirement | null) {
+  const { publicReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.matches(requirement),
-    queryFn: () =>
-      source(
-        () => mock.getMatches(requirement!),
-        () => data(api.post<MatchResult[]>("/matches", requirement))
-      ),
-    enabled: !!requirement,
+    queryFn: () => data(api.post<MatchResult[]>("/matches", requirement)),
+    enabled: publicReady && !!requirement,
     // Keep the old ranking on screen while re-ranking so cards can animate to new positions.
     placeholderData: keepPreviousData,
   });
@@ -177,11 +149,7 @@ export function useMatches(requirement: Requirement | null) {
 
 export function useParseRequest() {
   return useMutation({
-    mutationFn: (text: string) =>
-      source(
-        () => mock.parseRequest(text),
-        () => data(api.post<ParsedRequest>("/requests/parse", { text }))
-      ),
+    mutationFn: (text: string) => data(api.post<ParsedRequest>("/requests/parse", { text })),
     onError: (e) => toast.error("Couldn't read that request", { description: apiErrorMessage(e) }),
   });
 }
@@ -191,25 +159,20 @@ export function useParseRequest() {
 /* ------------------------------------------------------------------ */
 
 export function useBookings(role: Role) {
+  const { privateReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.bookings(role),
-    queryFn: () =>
-      source(
-        () => mock.getBookings(role),
-        () => data(api.get<BookingDetail[]>("/bookings", { params: { role } }))
-      ),
+    queryFn: () => data(api.get<BookingDetail[]>("/bookings", { params: { role } })),
+    enabled: privateReady,
   });
 }
 
 export function useBooking(id: string | undefined, options: { refetchInterval?: number } = {}) {
+  const { privateReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.booking(id ?? ""),
-    queryFn: () =>
-      source(
-        () => mock.getBooking(id!),
-        () => data(api.get<BookingDetail>(`/bookings/${id}`))
-      ),
-    enabled: !!id,
+    queryFn: () => data(api.get<BookingDetail>(`/bookings/${id}`)),
+    enabled: privateReady && !!id,
     refetchInterval: options.refetchInterval,
     refetchIntervalInBackground: false,
   });
@@ -218,11 +181,7 @@ export function useBooking(id: string | undefined, options: { refetchInterval?: 
 export function useSubmitReview() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ bookingId, ...body }: ReviewInput) =>
-      source(
-        () => mock.submitReview({ bookingId, ...body }),
-        () => data(api.post<BookingDetail>(`/bookings/${bookingId}/reviews`, body))
-      ),
+    mutationFn: ({ bookingId, ...body }: ReviewInput) => data(api.post<BookingDetail>(`/bookings/${bookingId}/reviews`, body)),
     onSuccess: (b) => {
       qc.setQueryData(queryKeys.booking(b.id), b);
       qc.invalidateQueries({ queryKey: ["bookings"] });
@@ -235,14 +194,9 @@ export function useSubmitReview() {
 export function useCreateBooking() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: CreateBookingInput) =>
-      source(
-        () => mock.createBooking(input),
-        () =>
-          data(api.post<Booking>("/bookings", input)).catch((e: unknown) => {
+    mutationFn: (input: CreateBookingInput) => data(api.post<Booking>("/bookings", input)).catch((e: unknown) => {
             throw asConflict(e) ?? e;
-          })
-      ),
+          }),
     onSuccess: (b, input) => {
       qc.invalidateQueries({ queryKey: ["bookings"] });
       qc.invalidateQueries({ queryKey: queryKeys.availability(input.resourceId) });
@@ -262,11 +216,7 @@ export function useCreateBooking() {
 export function useCreateBundle() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (input: BundleInput) =>
-      source(
-        () => mock.createBundle(input),
-        () => data(api.post<Booking[]>("/bookings/bundle", input))
-      ),
+    mutationFn: (input: BundleInput) => data(api.post<Booking[]>("/bookings/bundle", input)),
     onSuccess: (bookings) => {
       qc.invalidateQueries({ queryKey: ["bookings"] });
       qc.invalidateQueries({ queryKey: ["matches"] });
@@ -285,11 +235,7 @@ const RESPOND_COPY: Record<RespondBookingInput["action"], string> = {
 export function useRespondBooking() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, ...body }: RespondBookingInput) =>
-      source(
-        () => mock.respondBooking({ id, ...body }),
-        () => data(api.post<BookingDetail>(`/bookings/${id}/respond`, body))
-      ),
+    mutationFn: ({ id, ...body }: RespondBookingInput) => data(api.post<BookingDetail>(`/bookings/${id}/respond`, body)),
     // Optimistic: flip the status in every cached list (and the detail) right away.
     onMutate: async (input) => {
       await qc.cancelQueries({ queryKey: ["bookings"] });
@@ -319,13 +265,11 @@ export function useRespondBooking() {
 }
 
 export function useSavedSearches() {
+  const { privateReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.savedSearches(),
-    queryFn: () =>
-      source(
-        () => mock.getSavedSearches(),
-        () => data(api.get<SavedSearch[]>("/saved-searches"))
-      ),
+    queryFn: () => data(api.get<SavedSearch[]>("/saved-searches")),
+    enabled: privateReady,
   });
 }
 
@@ -334,50 +278,41 @@ export function useSavedSearches() {
 /* ------------------------------------------------------------------ */
 
 export function useAnalytics(range: AnalyticsRange) {
+  const { privateReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.analytics(range),
-    queryFn: () =>
-      source(
-        () => mock.getAnalytics(range),
-        () => data(api.get<AnalyticsSummary>("/analytics", { params: { range } }))
-      ),
+    queryFn: () => data(api.get<AnalyticsSummary>("/analytics", { params: { range } })),
     placeholderData: keepPreviousData,
+    enabled: privateReady,
   });
 }
 
 export function useAnalyticsReport(range: DateRange) {
+  const { privateReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.report(range),
-    queryFn: () =>
-      source(
-        () => mock.getAnalyticsReport(range),
-        () => data(api.get<AnalyticsReport>("/analytics/report", { params: range }))
-      ),
+    queryFn: () => data(api.get<AnalyticsReport>("/analytics/report", { params: range })),
     placeholderData: keepPreviousData,
+    enabled: privateReady,
   });
 }
 
 export function useSubscribeNewsletter() {
   return useMutation({
-    mutationFn: (email: string) =>
-      source(
-        () => mock.subscribeNewsletter(email),
-        () => data(api.post<{ subscribed: boolean }>("/newsletter", { email }))
-      ),
+    mutationFn: (email: string) => data(api.post<{ subscribed: boolean }>("/newsletter", { email })),
     onSuccess: () => toast.success("You're on the list", { description: "One short email a month. Unsubscribe anytime." }),
     onError: (e) => toast.error("Couldn't subscribe", { description: apiErrorMessage(e) }),
   });
 }
 
+/** The bell renders on public pages too: it only asks once the account has a business. */
 export function useNotifications() {
+  const { privateReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.notifications(),
-    queryFn: () =>
-      source(
-        () => mock.getNotifications(),
-        () => data(api.get<Notification[]>("/notifications"))
-      ),
-    refetchInterval: USE_MOCK ? false : 60_000,
+    enabled: privateReady,
+    queryFn: () => data(api.get<Notification[]>("/notifications")),
+    refetchInterval: 60_000,
   });
 }
 
@@ -387,18 +322,20 @@ function rememberContract(qc: ReturnType<typeof useQueryClient>, contract: Hando
 }
 
 export function useBookingContracts(bookingId: string | undefined, enabled: boolean) {
+  const { privateReady } = useApiGate();
   return useQuery({
     queryKey: ["contracts", "booking", bookingId ?? ""],
     queryFn: () => data(api.get<HandoverContract[]>(`/bookings/${bookingId}/contracts`)),
-    enabled: Boolean(bookingId) && enabled && !USE_MOCK,
+    enabled: privateReady && Boolean(bookingId) && enabled,
   });
 }
 
 export function useContract(id: string | undefined) {
+  const { privateReady } = useApiGate();
   return useQuery({
     queryKey: queryKeys.contract(id ?? ""),
     queryFn: () => data(api.get<HandoverContract>(`/contracts/${id}`)),
-    enabled: Boolean(id) && !USE_MOCK,
+    enabled: privateReady && Boolean(id),
   });
 }
 
@@ -426,8 +363,7 @@ export function useApproveHandover() {
 export function useSignContract() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, purpose, dataUrl }: { id: string; purpose: "DISPATCH" | "RECEIPT"; dataUrl: string }) =>
-      data(api.post<HandoverContract>(`/contracts/${id}/sign`, { purpose, dataUrl })),
+    mutationFn: ({ id, purpose, dataUrl }: { id: string; purpose: "DISPATCH" | "RECEIPT"; dataUrl: string }) => data(api.post<HandoverContract>(`/contracts/${id}/sign`, { purpose, dataUrl })),
     onSuccess: (contract) => {
       rememberContract(qc, contract);
       toast.success("Signed page saved");
@@ -461,8 +397,7 @@ export function useOpenDispute() {
 export function useAgreeDispute() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, disputeId }: { id: string; disputeId: string }) =>
-      data(api.post<HandoverContract>(`/contracts/${id}/disputes/${disputeId}/agree`)),
+    mutationFn: ({ id, disputeId }: { id: string; disputeId: string }) => data(api.post<HandoverContract>(`/contracts/${id}/disputes/${disputeId}/agree`)),
     onSuccess: (contract) => {
       rememberContract(qc, contract);
       toast.success("Agreement recorded");

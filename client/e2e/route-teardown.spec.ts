@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { QA_EMAIL, signInAs } from "./clerk-env";
 
 /**
  * Regression: GSAP pin-spacers used to reparent React-owned nodes on the landing page,
@@ -6,13 +7,26 @@ import { expect, test, type Page } from "@playwright/test";
  * Navigates client-side (no reloads) so every page really unmounts.
  */
 
-const ROUTE: [path: string, ready: (page: Page) => Promise<unknown>][] = [
-  ["/", (p) => p.locator("[data-hero]").waitFor()],
-  ["/discover", (p) => p.getByRole("heading", { level: 1 }).first().waitFor()],
-  ["/dashboard", (p) => p.getByText(/Dashboard ·/).first().waitFor()],
-  ["/", (p) => p.locator("[data-hero]").waitFor()],
-  ["/requests", (p) => p.getByText(/Every/).first().waitFor()],
-];
+type Step = [path: string, ready: (page: Page) => Promise<unknown>, lands?: RegExp];
+const heroReady = (p: Page) => p.locator("[data-hero]").waitFor();
+const discoverReady = (p: Page) => p.getByRole("heading", { level: 1 }).first().waitFor();
+
+/** Signed in (E2E_QA_EMAIL, an onboarded account): the app pages. Signed out: they bounce to sign-in. */
+const ROUTE: Step[] = QA_EMAIL
+  ? [
+      ["/", heroReady],
+      ["/discover", discoverReady],
+      ["/dashboard", (p) => p.getByText(/Dashboard ·/).first().waitFor()],
+      ["/", heroReady],
+      ["/requests", (p) => p.getByText(/Every/).first().waitFor()],
+    ]
+  : [
+      ["/", heroReady],
+      ["/discover", discoverReady],
+      ["/dashboard", (p) => p.waitForURL(/\/sign-in/), /\/sign-in\?redirect_url=%2Fdashboard/],
+      ["/", heroReady],
+      ["/requests", (p) => p.waitForURL(/\/sign-in/), /\/sign-in\?redirect_url=%2Frequests/],
+    ];
 
 /** Client-side navigation through React Router's history listener. */
 async function go(page: Page, path: string) {
@@ -37,7 +51,7 @@ async function exerciseLanding(page: Page) {
   expect(await page.locator(".pin-spacer").count()).toBeGreaterThan(0);
 }
 
-test("Landing → Discover → Dashboard → Landing → Requests, ×3, with no console errors", async ({ page }) => {
+test(`Landing → Discover → Dashboard → Landing → Requests, ×3, ${QA_EMAIL ? "signed in" : "signed out"}, with no console errors`, async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(`pageerror: ${e.message}`));
   page.on("console", (m) => {
@@ -45,13 +59,17 @@ test("Landing → Discover → Dashboard → Landing → Requests, ×3, with no 
   });
 
   await page.goto("/");
+  if (QA_EMAIL) {
+    await signInAs(page, QA_EMAIL);
+    await page.goto("/");
+  }
   await ROUTE[0][1](page);
 
   for (let round = 1; round <= 3; round++) {
-    for (const [i, [path, ready]] of ROUTE.entries()) {
+    for (const [i, [path, ready, lands]] of ROUTE.entries()) {
       if (!(round === 1 && i === 0)) await go(page, path);
       await ready(page);
-      await expect(page).toHaveURL(new RegExp(`${path === "/" ? "/$" : path}`));
+      await expect(page).toHaveURL(lands ?? new RegExp(`${path === "/" ? "/$" : path}`));
       if (path === "/") await exerciseLanding(page);
       else {
         // RouteChangeHandler should have reset scroll and no pin-spacer should survive the landing unmount.

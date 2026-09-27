@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useContract, useSignContract } from "@/hooks/queries";
 import type { HandoverContract } from "@/lib/types";
 import { formatINR } from "@/lib/utils";
+import { DevErrorDetail } from "@/components/DevErrorDetail";
 
 async function fileToJpeg(file: File) {
   const bitmap = await createImageBitmap(file);
@@ -128,7 +129,7 @@ function Paper({ contract }: { contract: HandoverContract }) {
 export default function ContractPage() {
   const { id } = useParams();
   const [params] = useSearchParams();
-  const { data, isPending, isError, refetch } = useContract(id);
+  const { data, isPending, isError, error, refetch } = useContract(id);
   const sign = useSignContract();
 
   if (params.get("arrive") === "1" && id) return <Navigate to={`/handover/${id}`} replace />;
@@ -136,8 +137,9 @@ export default function ContractPage() {
   if (isPending) return <div className="mx-auto h-96 max-w-3xl animate-pulse rounded-lg bg-card" aria-busy="true" />;
   if (isError || !data) {
     return (
-      <div className="surface mx-auto max-w-lg space-y-3 p-6">
+      <div className="surface mx-auto max-w-lg space-y-3 p-6" data-testid="error-state">
         <p>This contract is not on your account.</p>
+        <DevErrorDetail error={error} />
         <Button size="sm" variant="outline" onClick={() => refetch()}>
           Try again
         </Button>

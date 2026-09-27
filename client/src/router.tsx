@@ -11,7 +11,8 @@ import LandingPage from "@/pages/Landing";
 import NotFoundPage from "@/pages/NotFound";
 import RequestsPage from "@/pages/Requests";
 import ResourceDetailPage from "@/pages/ResourceDetail";
-import SignInPage from "@/pages/SignIn";
+import SignInPage, { SignUpPage } from "@/pages/SignIn";
+import OnboardingPage from "@/pages/Onboarding";
 
 export const router = createBrowserRouter([
   {
@@ -25,6 +26,9 @@ export const router = createBrowserRouter([
           { path: "discover", element: <DiscoverPage /> },
           { path: "resource/:id", element: <ResourceDetailPage /> },
           { path: "sign-in/*", element: <SignInPage /> },
+          { path: "sign-up/*", element: <SignUpPage /> },
+          // Signed in without a business: every route redirects here (see <OnboardingRedirect />).
+          { path: "onboarding", element: <OnboardingPage /> },
           {
             element: <ProtectedRoute />,
             children: [

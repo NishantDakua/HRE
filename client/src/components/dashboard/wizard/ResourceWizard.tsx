@@ -66,7 +66,8 @@ function Field({ label, hint, error, children, className }: { label: string; hin
 
 function Footer({ step, onBack, next = "Continue", pending }: { step: number; onBack?: () => void; next?: string; pending?: boolean }) {
   return (
-    <div className="mt-6 flex items-center justify-between gap-3 border-t border-border pt-4">
+    // Phones: pinned to the bottom of the scrolling panel (and above the on-screen keyboard).
+    <div className="sticky bottom-0 -mx-5 mt-6 flex items-center justify-between gap-3 border-t border-border bg-card px-5 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-4 sm:static sm:mx-0 sm:bg-transparent sm:px-0 sm:pb-0">
       {step > 0 ? (
         <Button type="button" variant="ghost" onClick={onBack}>
           <ArrowLeft /> Back
@@ -591,7 +592,7 @@ export function ResourceWizard({ open, onClose, resource }: ResourceWizardProps)
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 bg-ink/35 backdrop-blur-[2px]"
+            className="fixed inset-0 z-[60] bg-ink/35 backdrop-blur-[2px]"
             onClick={onClose}
             aria-hidden
           />
@@ -604,7 +605,7 @@ export function ResourceWizard({ open, onClose, resource }: ResourceWizardProps)
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 16, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 380, damping: 32 }}
-            className="fixed inset-x-3 bottom-3 top-3 z-50 mx-auto flex max-w-2xl flex-col overflow-hidden rounded-[22px] border border-border bg-card shadow-card-hover sm:inset-x-6 sm:bottom-auto sm:top-[6vh] sm:max-h-[88vh]"
+            className="fixed inset-0 z-[60] mx-auto flex h-[100dvh] max-w-2xl flex-col overflow-hidden border-border bg-card shadow-card-hover sm:inset-x-6 sm:bottom-auto sm:top-[6vh] sm:h-auto sm:max-h-[88vh] sm:rounded-[22px] sm:border"
           >
             <header className="border-b border-border px-5 pb-4 pt-5 sm:px-6">
               <div className="flex items-start justify-between gap-3">

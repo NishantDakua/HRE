@@ -88,6 +88,9 @@ export type BusinessType = "Hotel" | "Restaurant" | "Caterer" | "Banquet Hall";
 
 export type Role = "provider" | "seeker";
 
+/** What a business does on Spare, chosen at onboarding. BOTH gets the seeker/provider switch. */
+export type BusinessRole = "SEEKER" | "PROVIDER" | "BOTH";
+
 export interface GeoPoint {
   lat: number;
   lng: number;
@@ -479,4 +482,32 @@ export interface HandoverContract {
   qrDataUrl: string;
   viewerRole: "PROVIDER" | "SEEKER" | null;
   viewerHasScanned: boolean;
+}
+
+/* ------------------------------------------------------------------ */
+/* Account                                                             */
+/* ------------------------------------------------------------------ */
+
+export interface MyBusiness extends Business {
+  role: BusinessRole;
+}
+
+/** GET /api/me: the signed-in Clerk user and their business (null until onboarding). */
+export interface Me {
+  user: {
+    id: string;
+    email: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    imageUrl: string | null;
+  };
+  business: MyBusiness | null;
+}
+
+export interface OnboardingInput {
+  name: string;
+  type: BusinessType;
+  area: Area;
+  address?: string;
+  role: BusinessRole;
 }

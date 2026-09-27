@@ -151,24 +151,39 @@ async function main() {
     ],
   });
 
+  // Every notification belongs to the business it's about (unowned rows reach no one).
+  const NOTE_OWNER: Record<string, string> = { n01: 'b10', n02: 'b04', n03: 'b06', n04: 'b11' };
   await prisma.exchangeNotification.createMany({
-    data: notifications.map((note) => ({
-      id: note.id,
-      title: note.title,
-      body: note.body,
-      createdAt: new Date(note.createdAt),
-      read: note.read,
-    })),
+    data: [
+      ...notifications.map((note) => ({
+        id: note.id,
+        businessId: NOTE_OWNER[note.id] ?? null,
+        title: note.title,
+        body: note.body,
+        createdAt: new Date(note.createdAt),
+        read: note.read,
+      })),
+      // Demo personas' own inboxes.
+      { id: 'n-b02-1', businessId: 'b02', title: 'Counter-offer received', body: 'The Sahar Grand countered at ₹12,000/hr on the half ballroom (SPR-24C3).', createdAt: new Date('2026-09-22T13:45:00+05:30'), read: false },
+      { id: 'n-b02-2', businessId: 'b02', title: 'Request sent', body: 'Rooftop product launch (SPR-24A1) is waiting on Phoenix Social House.', createdAt: new Date('2026-09-25T10:15:00+05:30'), read: true },
+      { id: 'n-b09-1', businessId: 'b09', title: 'Urgent request', body: 'Juhu Tara Caterers need 2 refrigerated vans at 6am (SPR-25A2).', createdAt: new Date('2026-09-26T08:12:00+05:30'), read: false },
+      { id: 'n-b09-2', businessId: 'b09', title: 'Counter-offer received', body: 'Phoenix Social House asked ₹550 per buffet counter (SPR-25C1).', createdAt: new Date('2026-09-24T10:22:00+05:30'), read: false },
+    ],
   });
 
   await prisma.exchangeSavedSearch.createMany({
-    data: savedSearches.map((search) => ({
+    data: [
+      ...savedSearches.map((search) => ({
       id: search.id,
+      // The mock's saved searches are the demo seeker's (Carter Road Kitchen).
+      businessId: 'b02',
       name: search.name,
       query: search.query,
       createdAt: new Date(search.createdAt),
       newMatches: search.newMatches,
-    })),
+      })),
+      { id: 'ss-b09-1', businessId: 'b09', name: 'Chiavari chairs for Diwali', query: 'category=CHAIRS_TABLES&q=chiavari', createdAt: new Date('2026-09-19T11:00:00+05:30'), newMatches: 2 },
+    ],
   });
 
   console.log(

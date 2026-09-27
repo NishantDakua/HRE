@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { clerkClient } from '@clerk/express';
+import { clerkClient, getAuth } from '@clerk/express';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
@@ -16,7 +16,7 @@ declare global {
 
 export const authenticateRequest = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const clerkUserId = req.auth?.userId;
+    const clerkUserId = getAuth(req).userId;
 
     if (!clerkUserId) {
       return res.status(401).json({ error: 'Unauthorized' });
@@ -58,7 +58,7 @@ export const authenticateRequest = async (req: Request, res: Response, next: Nex
 
 export const optionalAuth = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const clerkUserId = req.auth?.userId;
+    const clerkUserId = getAuth(req).userId;
 
     if (clerkUserId) {
       req.clerkUserId = clerkUserId;

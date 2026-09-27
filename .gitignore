@@ -21,3 +21,6 @@ prisma/dev.db-wal
 server/uploads/
 test-results/
 playwright-report/
+
+# Local DB snapshots (npm run db:backup -w server)
+server/backups/

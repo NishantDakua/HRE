@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticateRequest } from '../middleware/auth.js';
 
-const router = Router();
+const router: Router = Router();
 const prisma = new PrismaClient();
 
 // Get current user
@@ -76,7 +76,7 @@ router.post('/onboarding', authenticateRequest, async (req: Request, res: Respon
     });
 
     // If provider, create provider profile
-    if ((hreRole === 'PROVIDER' || hreRole === 'BOTH') && !business.providerProfile) {
+    if ((hreRole === 'PROVIDER' || hreRole === 'BOTH') && !(await prisma.providerProfile.findUnique({ where: { businessId: business.id } }))) {
       await prisma.providerProfile.create({
         data: {
           businessId: business.id,

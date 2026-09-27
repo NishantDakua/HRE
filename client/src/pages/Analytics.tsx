@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { useAnalyticsReport } from "@/hooks/queries";
 import type { DateRange, ReportTotals } from "@/lib/types";
 import { cn, formatINR } from "@/lib/utils";
-import { useAppStore } from "@/store/app";
+import { useMode } from "@/hooks/account";
+import { DevErrorDetail } from "@/components/DevErrorDetail";
 
 const DEFAULT_PRESET = "30d";
 
@@ -61,9 +62,9 @@ function KpiTile({ kpi, now, prev, i }: { kpi: Kpi; now: number; prev: number; i
 }
 
 export default function AnalyticsPage() {
-  const mode = useAppStore((s) => s.mode);
+  const mode = useMode();
   const { range, presetId, set } = useRangeParam();
-  const { data: report, isPending, isError, isFetching, isPlaceholderData, refetch } = useAnalyticsReport(range);
+  const { data: report, isPending, isError, error, isFetching, isPlaceholderData, refetch } = useAnalyticsReport(range);
 
   const kpis: Kpi[] =
     mode === "provider"
@@ -85,7 +86,7 @@ export default function AnalyticsPage() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Analytics · {mode === "provider" ? "Provider" : "Seeker"}</p>
-          <h1 className="mt-2 text-4xl leading-[1.05] tracking-tightest md:text-5xl">
+          <h1 className="mt-2 text-[clamp(1.75rem,0.9rem+4vw,2.25rem)] leading-[1.05] tracking-tightest [overflow-wrap:anywhere] md:text-5xl">
             How the <em>idle</em> is earning.
           </h1>
           <p className="mt-2 font-mono text-xs text-muted">
@@ -110,8 +111,9 @@ export default function AnalyticsPage() {
           </div>
         </div>
       ) : isError || !report ? (
-        <div className="surface space-y-3 p-6">
+        <div className="surface space-y-3 p-6" data-testid="error-state">
           <p className="text-text">Couldn&apos;t load analytics for this range.</p>
+          <DevErrorDetail error={error} />
           <Button size="sm" variant="outline" onClick={() => refetch()}>
             <RefreshCw /> Try again
           </Button>

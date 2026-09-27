@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = Number(process.env.E2E_PORT ?? 3101);
+// A dedicated dev server for tests (not whatever else is running): live API via the proxy.
+const PORT = Number(process.env.E2E_PORT ?? 3103);
 
 export default defineConfig({
   testDir: "./e2e",

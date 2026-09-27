@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { useAgreeDispute, useApproveHandover, useContract, useOpenDispute, useRecordArrival } from "@/hooks/queries";
 import type { HandoverContract } from "@/lib/types";
 import { formatINR } from "@/lib/utils";
+import { DevErrorDetail } from "@/components/DevErrorDetail";
 
 const PHASES = [
   { id: "DISPATCH", label: "Provider sends" },
@@ -89,7 +90,7 @@ function DisputeForm({ contract }: { contract: HandoverContract }) {
 
 export default function HandoverPage() {
   const { id } = useParams();
-  const { data, isPending, isError, refetch } = useContract(id);
+  const { data, isPending, isError, error, refetch } = useContract(id);
   const scan = useRecordArrival();
   const approve = useApproveHandover();
   const agree = useAgreeDispute();
@@ -107,8 +108,9 @@ export default function HandoverPage() {
   if (isPending) return <div className="mx-auto h-80 max-w-lg animate-pulse rounded-lg bg-card" aria-busy="true" />;
   if (isError || !data) {
     return (
-      <div className="surface mx-auto max-w-lg space-y-3 p-6">
+      <div className="surface mx-auto max-w-lg space-y-3 p-6" data-testid="error-state">
         <p>This handover is not on your account.</p>
+        <DevErrorDetail error={error} />
         <Button size="sm" variant="outline" onClick={() => refetch()}>
           Try again
         </Button>

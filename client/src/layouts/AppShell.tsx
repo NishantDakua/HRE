@@ -1,5 +1,7 @@
 import { Outlet, useMatch } from "react-router-dom";
 import { TopNav } from "@/components/shell/TopNav";
+import { ApiStatusDot } from "@/components/ApiStatusDot";
+import { BottomTabBar } from "@/components/shell/BottomTabBar";
 
 /** Nav + page frame. The landing page is full-bleed with a transparent nav over the hero. */
 export function AppShell() {
@@ -7,7 +9,8 @@ export function AppShell() {
   return (
     <>
       <TopNav transparent={isLanding} />
-      <main>
+      {/* Phones: room below the content for the fixed tab bar. */}
+      <main className="pb-tabbar md:pb-0">
         {isLanding ? (
           <Outlet />
         ) : (
@@ -16,6 +19,8 @@ export function AppShell() {
           </div>
         )}
       </main>
+      <BottomTabBar />
+      <ApiStatusDot />
     </>
   );
 }

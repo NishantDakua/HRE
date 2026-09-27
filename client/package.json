@@ -45,6 +45,7 @@
     "zustand": "^4.5.5"
   },
   "devDependencies": {
+    "@clerk/testing": "^2.2.39",
     "@playwright/test": "1.61.1",
     "@types/leaflet": "^1.9.14",
     "@types/node": "^20.14.0",

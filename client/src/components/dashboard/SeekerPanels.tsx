@@ -10,9 +10,10 @@ import { IN_FLIGHT } from "@/lib/bookings";
 import { CATEGORY_LABEL, RESOURCE_CATEGORIES, type ResourceCategory } from "@/lib/types";
 import { formatINR } from "@/lib/utils";
 import { formatWindow } from "./format";
+import { DevErrorDetail } from "@/components/DevErrorDetail";
 
 export function ActiveRequests() {
-  const { data, isPending, isError, refetch } = useBookings("seeker");
+  const { data, isPending, isError, error, refetch } = useBookings("seeker");
   const active = useMemo(
     () => (data ?? []).filter((b) => IN_FLIGHT.includes(b.status)).sort((a, b) => parseISO(a.startAt).getTime() - parseISO(b.startAt).getTime()),
     [data]
@@ -35,8 +36,9 @@ export function ActiveRequests() {
           ))}
         </div>
       ) : isError ? (
-        <div className="surface space-y-3 p-6">
+        <div className="surface space-y-3 p-6" data-testid="error-state">
           <p className="text-text">Couldn&apos;t load your requests.</p>
+          <DevErrorDetail error={error} />
           <Button size="sm" variant="outline" onClick={() => refetch()}>
             Try again
           </Button>
@@ -104,7 +106,7 @@ function describe(query: string) {
 }
 
 export function SavedSearches() {
-  const { data, isPending, isError } = useSavedSearches();
+  const { data, isPending, isError, error } = useSavedSearches();
 
   return (
     <section aria-labelledby="saved-title" className="space-y-4">
@@ -114,7 +116,10 @@ export function SavedSearches() {
       {isPending ? (
         <div className="h-[200px] animate-pulse rounded-lg border border-border bg-card" />
       ) : isError ? (
-        <p className="text-sm text-muted">Couldn&apos;t load saved searches.</p>
+        <div data-testid="error-state">
+          <p className="text-sm text-muted">Couldn&apos;t load saved searches.</p>
+          <DevErrorDetail error={error} />
+        </div>
       ) : data.length === 0 ? (
         <div className="surface px-6 py-10 text-center text-sm text-muted">Save a search on Discover to get alerts here.</div>
       ) : (
@@ -125,9 +130,9 @@ export function SavedSearches() {
               <li key={s.id}>
                 <Link to={`/discover?${s.query}`} className="group flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-paper/60">
                   <div className="min-w-0">
-                    <p className="flex items-center gap-2 text-sm font-medium text-text">
-                      <Bookmark className="size-3.5 text-primary" />
-                      {s.name}
+                    <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-text">
+                      <Bookmark className="size-3.5 shrink-0 text-primary" />
+                      <span className="truncate">{s.name}</span>
                       {s.newMatches > 0 && (
                         <span className="rounded-full bg-available/10 px-1.5 py-0.5 font-mono text-[10px] text-available">{s.newMatches} new</span>
                       )}

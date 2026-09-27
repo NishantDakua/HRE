@@ -8,6 +8,7 @@ import { useMyResources, useUpdateResource } from "@/hooks/queries";
 import type { MyResource } from "@/lib/types";
 import { cn, formatINR } from "@/lib/utils";
 import { ListingStrip } from "./ListingStrip";
+import { DevErrorDetail } from "@/components/DevErrorDetail";
 
 function UtilisationBar({ value }: { value: number }) {
   const pct = Math.round(value * 100);
@@ -47,7 +48,7 @@ function StatusToggle({ resource }: { resource: MyResource }) {
 }
 
 export function ListingsTable({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r: MyResource) => void }) {
-  const { data, isPending, isError, refetch } = useMyResources();
+  const { data, isPending, isError, error, refetch } = useMyResources();
 
   return (
     <section aria-labelledby="listings-title" className="space-y-4">
@@ -63,8 +64,9 @@ export function ListingsTable({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r
       {isPending ? (
         <div className="h-[220px] animate-pulse rounded-lg border border-border bg-card" aria-busy="true" aria-label="Loading listings" />
       ) : isError ? (
-        <div className="surface space-y-3 p-6">
+        <div className="surface space-y-3 p-6" data-testid="error-state">
           <p className="text-text">Couldn&apos;t load your listings.</p>
+          <DevErrorDetail error={error} />
           <Button size="sm" variant="outline" onClick={() => refetch()}>
             Try again
           </Button>
@@ -72,15 +74,64 @@ export function ListingsTable({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r
       ) : data.length === 0 ? (
         <div className="surface flex flex-col items-center gap-2 px-6 py-12 text-center">
           <PackageOpen className="size-6 text-muted" />
-          <p className="font-display text-xl text-ink">Nothing listed yet.</p>
+          <p className="font-display text-xl text-ink">No listings yet.</p>
           <p className="text-sm text-muted">Your idle chairs, vans and halls could be earning.</p>
           <Button className="mt-2" onClick={onAdd}>
-            <Plus /> List your first resource
+            <Plus /> Add resource
           </Button>
         </div>
       ) : (
-        <div className="surface overflow-x-auto" data-lenis-prevent>
-          <table className="w-full min-w-[860px] text-sm">
+        <div className="surface overflow-hidden md:overflow-x-auto" data-lenis-prevent>
+          <ul className="divide-y divide-border md:hidden">
+            {data.map((r) => {
+              const Icon = CATEGORY_ICON[r.category];
+              return (
+                <li key={r.id} className={cn("space-y-3 p-4", r.status === "PAUSED" && "opacity-60")}>
+                  <div className="flex items-start gap-3">
+                    <span className="grid size-9 shrink-0 place-items-center rounded-md bg-sand">
+                      <Icon className="size-4 text-ink/70" strokeWidth={1.5} />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <Link to={`/resource/${r.id}`} className="flex min-w-0 items-center gap-1 font-medium text-text">
+                        <span className="truncate">{r.title}</span> <ArrowUpRight className="size-3 shrink-0 text-muted" />
+                      </Link>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                        <PriceTag amount={r.price} unit={r.unit} size="sm" />
+                        {r.pendingRequests > 0 && (
+                          <span className="rounded-full bg-primary/10 px-1.5 py-0.5 font-mono text-[10px] text-primary">
+                            {r.pendingRequests} pending
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <dl className="grid grid-cols-2 gap-3 text-xs">
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-[0.1em] text-muted">Stock</dt>
+                      <dd className="mt-1 font-mono tabular-nums text-text">
+                        {formatINR(r.available)}/{formatINR(r.quantity)} <span className="text-muted">{r.unitLabel}</span>
+                      </dd>
+                    </div>
+                    <div>
+                      <dt className="text-[11px] uppercase tracking-[0.1em] text-muted">Utilization</dt>
+                      <dd className="mt-1"><UtilisationBar value={r.utilisation} /></dd>
+                    </div>
+                  </dl>
+                  <div className="overflow-hidden">
+                    <p className="mb-1 text-[11px] uppercase tracking-[0.1em] text-muted">Next 14 days</p>
+                    <ListingStrip resourceId={r.id} />
+                  </div>
+                  <div className="flex items-center justify-between gap-3">
+                    <StatusToggle resource={r} />
+                    <Button size="sm" variant="outline" onClick={() => onEdit(r)} aria-label={`Edit ${r.title}`}>
+                      <Pencil /> Edit
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
+          <table className="hidden w-full min-w-[860px] text-sm md:table">
             <thead>
               <tr className="border-b border-border text-left text-[11px] uppercase tracking-[0.1em] text-muted">
                 <th scope="col" className="px-4 py-3 font-medium">Listing</th>

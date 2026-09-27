@@ -25,8 +25,6 @@ const companies = [
     fulfillmentRate: 0.97,
     verified: true,
     joinedAt: new Date('2026-01-14'),
-    clerkUserId: 'user_3JrEUGGgkBghvEhPRvQkex6JocW',
-    ownerEmail: 'cooodegod@gmail.com',
   },
   {
     id: 'c02',
@@ -43,8 +41,6 @@ const companies = [
     fulfillmentRate: 0.95,
     verified: true,
     joinedAt: new Date('2025-11-02'),
-    clerkUserId: 'user_3JrFqZwjWCqb6sErJHqiP5XfnGd',
-    ownerEmail: 'surajy.tech@gmail.com',
   },
   {
     id: 'c03',
@@ -61,8 +57,6 @@ const companies = [
     fulfillmentRate: 0.93,
     verified: true,
     joinedAt: new Date('2025-08-19'),
-    clerkUserId: 'user_3Js14IphTxmvLsxebTb9o61Bb2c',
-    ownerEmail: 'coldcart+clerk_test@example.com',
   },
   {
     id: 'c04',
@@ -79,8 +73,6 @@ const companies = [
     fulfillmentRate: 0.98,
     verified: true,
     joinedAt: new Date('2025-06-30'),
-    clerkUserId: 'user_3Js14rqthigx1GQrveXh5tDRpXo',
-    ownerEmail: 'westwharf+clerk_test@example.com',
   },
 ];
 
@@ -644,7 +636,7 @@ async function main() {
     });
   }
 
-  await prisma.exchangeNotification.deleteMany({ where: { id: { in: ['n-c01-1', 'n-c01-2', 'n-c01-3', 'n-c02-1'] } } });
+  await prisma.exchangeNotification.deleteMany({ where: { id: { in: ['n-c01-1', 'n-c01-2', 'n-c01-3', 'n-c02-1', 'n-c03-1', 'n-c03-2', 'n-c04-1', 'n-c04-2'] } } });
   await prisma.exchangeNotification.createMany({
     data: [
       {
@@ -679,10 +671,42 @@ async function main() {
         createdAt: new Date('2026-09-25T14:11:00+05:30'),
         read: false,
       },
+      {
+        id: 'n-c03-1',
+        businessId: 'c03',
+        title: 'Codegod Table wants the night kitchen',
+        body: 'Sunday 10pm–4am for brunch prep. You countered at ₹3,600 an hour.',
+        createdAt: new Date('2026-09-24T11:40:00+05:30'),
+        read: false,
+      },
+      {
+        id: 'n-c03-2',
+        businessId: 'c03',
+        title: 'Reefer van request',
+        body: 'A neighbour needs cold storage on the move this week.',
+        createdAt: new Date('2026-09-22T16:20:00+05:30'),
+        read: true,
+      },
+      {
+        id: 'n-c04-1',
+        businessId: 'c04',
+        title: 'Tasting lunch confirmed',
+        body: 'Codegod Table’s private dining room is yours on 1 Oct, noon to 4pm.',
+        createdAt: new Date('2026-09-23T13:42:00+05:30'),
+        read: false,
+      },
+      {
+        id: 'n-c04-2',
+        businessId: 'c04',
+        title: 'New request for the AV kit',
+        body: 'Someone nearby asked about your conference AV this weekend.',
+        createdAt: new Date('2026-09-25T10:05:00+05:30'),
+        read: false,
+      },
     ],
   });
 
-  await prisma.exchangeSavedSearch.deleteMany({ where: { id: { in: ['ss-c01-1', 'ss-c01-2', 'ss-c02-1'] } } });
+  await prisma.exchangeSavedSearch.deleteMany({ where: { id: { in: ['ss-c01-1', 'ss-c01-2', 'ss-c02-1', 'ss-c03-1', 'ss-c04-1'] } } });
   await prisma.exchangeSavedSearch.createMany({
     data: [
       {
@@ -707,6 +731,22 @@ async function main() {
         name: 'Morning pastry kitchens',
         query: 'category=KITCHEN&q=pastry',
         createdAt: new Date('2026-09-21T09:00:00+05:30'),
+        newMatches: 1,
+      },
+      {
+        id: 'ss-c03-1',
+        businessId: 'c03',
+        name: 'Buffet counters near Andheri',
+        query: 'category=CHAIRS_TABLES&area=Andheri&q=buffet',
+        createdAt: new Date('2026-09-19T09:00:00+05:30'),
+        newMatches: 2,
+      },
+      {
+        id: 'ss-c04-1',
+        businessId: 'c04',
+        name: 'Private dining rooms',
+        query: 'category=BANQUET_SPACE&q=private',
+        createdAt: new Date('2026-09-17T09:00:00+05:30'),
         newMatches: 1,
       },
     ],

@@ -1,30 +1,9 @@
 import { Router, type Request, type Response } from 'express';
-import { clerkClient, getAuth } from '@clerk/express';
 import { ContractError, ensureContracts, presentContract, quoteByNature, saveScan } from '../exchange/contracts.js';
-import { prisma } from './exchange.js';
-const router = Router();
+import { prisma } from '../exchange/db.js';
+import { requireActor } from '../exchange/actor.js';
+const router: Router = Router();
 
-async function actorBusiness(req: Request) {
-  const { userId } = getAuth(req);
-  if (!userId) return null;
-  const linked = await prisma.exchangeBusiness.findUnique({ where: { clerkUserId: userId } });
-  if (linked) return linked;
-  const clerkUser = await clerkClient.users.getUser(userId);
-  const email = clerkUser.emailAddresses[0]?.emailAddress?.toLowerCase();
-  if (!email) return null;
-  const match = await prisma.exchangeBusiness.findFirst({ where: { ownerEmail: email } });
-  if (!match) return null;
-  return prisma.exchangeBusiness.update({ where: { id: match.id }, data: { clerkUserId: userId } });
-}
-
-async function requireActor(req: Request, res: Response) {
-  const business = await actorBusiness(req);
-  if (!business) {
-    res.status(401).json({ error: 'Sign in required' });
-    return null;
-  }
-  return business;
-}
 
 function originOf(req: Request) {
   const browser = req.get('origin');

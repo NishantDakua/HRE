@@ -14,7 +14,8 @@ import { useBooking, useBookings } from "@/hooks/queries";
 import { ACTIONABLE } from "@/lib/bookings";
 import { BOOKING_STATUSES, BOOKING_STATUS_LABEL, type BookingDetail, type BookingStatus, type Role } from "@/lib/types";
 import { cn, formatINR } from "@/lib/utils";
-import { useAppStore } from "@/store/app";
+import { useMode } from "@/hooks/account";
+import { DevErrorDetail } from "@/components/DevErrorDetail";
 
 type Tab = "ALL" | BookingStatus;
 const isTab = (v: string | null): v is Tab => v === "ALL" || (BOOKING_STATUSES as readonly string[]).includes(v ?? "");
@@ -86,7 +87,7 @@ function LiveBadge({ updatedAt, fetching }: { updatedAt: number; fetching: boole
 }
 
 function RequestDetail({ id, mode, onBack }: { id: string; mode: Role; onBack: () => void }) {
-  const { data: b, isPending, isError, refetch, dataUpdatedAt, isFetching } = useBooking(id, { refetchInterval: 5000 });
+  const { data: b, isPending, isError, error, refetch, dataUpdatedAt, isFetching } = useBooking(id, { refetchInterval: 5000 });
 
   if (isPending) {
     return (
@@ -101,8 +102,9 @@ function RequestDetail({ id, mode, onBack }: { id: string; mode: Role; onBack: (
   }
   if (isError || !b) {
     return (
-      <div className="surface space-y-3 p-6">
+      <div className="surface space-y-3 p-6" data-testid="error-state">
         <p className="text-text">Couldn&apos;t load this request.</p>
+        <DevErrorDetail error={error} />
         <Button size="sm" variant="outline" onClick={() => refetch()}>
           <RefreshCw /> Try again
         </Button>
@@ -125,11 +127,13 @@ function RequestDetail({ id, mode, onBack }: { id: string; mode: Role; onBack: (
               <span className="font-mono text-[11px] text-muted">{b.ref}</span>
               <LiveBadge updatedAt={dataUpdatedAt} fetching={isFetching} />
             </div>
-            <h2 className="mt-2 text-2xl leading-tight tracking-tightest text-ink md:text-3xl">{b.title}</h2>
-            <p className="mt-1 inline-flex flex-wrap items-center gap-x-2 text-sm text-muted">
-              <span className="inline-flex items-center gap-1 text-text">
-                {mode === "seeker" ? "with" : "from"} {other.name}
-                {other.verified && <BadgeCheck className="size-3.5 text-primary" aria-label="Verified" />}
+            <h2 className="mt-2 text-2xl leading-tight tracking-tightest text-ink [overflow-wrap:anywhere] md:text-3xl">{b.title}</h2>
+            <p className="mt-1 inline-flex max-w-full flex-wrap items-center gap-x-2 text-sm text-muted">
+              <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-text">
+                <span className="truncate">
+                  {mode === "seeker" ? "with" : "from"} {other.name}
+                </span>
+                {other.verified && <BadgeCheck className="size-3.5 shrink-0 text-primary" aria-label="Verified" />}
               </span>
               <span className="inline-flex items-center gap-1 font-mono text-[11px]">
                 <MapPin className="size-3" /> {b.distanceKm} km
@@ -178,8 +182,8 @@ function RequestDetail({ id, mode, onBack }: { id: string; mode: Role; onBack: (
 /* ------------------------------------------------------------------ */
 
 export default function RequestsPage() {
-  const mode = useAppStore((s) => s.mode);
-  const { data, isPending, isError, refetch } = useBookings(mode);
+  const mode = useMode();
+  const { data, isPending, isError, error: listError, refetch } = useBookings(mode);
   const [params, setParams] = useSearchParams();
   const rawTab = params.get("status");
   const tab: Tab = isTab(rawTab) ? rawTab : "ALL";
@@ -229,7 +233,7 @@ export default function RequestsPage() {
     <div className="space-y-6">
       <header>
         <p className="eyebrow">{mode === "provider" ? "Incoming" : "Outgoing"} · Requests</p>
-        <h1 className="mt-2 text-4xl leading-[1.05] tracking-tightest md:text-5xl">
+        <h1 className="mt-2 text-[clamp(1.75rem,0.9rem+4vw,2.25rem)] leading-[1.05] tracking-tightest [overflow-wrap:anywhere] md:text-5xl">
           Every <em>deal</em>, in one thread.
         </h1>
       </header>
@@ -280,8 +284,9 @@ export default function RequestsPage() {
               ))}
             </div>
           ) : isError ? (
-            <div className="surface space-y-3 p-5">
+            <div className="surface space-y-3 p-5" data-testid="error-state">
               <p className="text-sm text-text">Couldn&apos;t load requests.</p>
+              <DevErrorDetail error={listError} />
               <Button size="sm" variant="outline" onClick={() => refetch()}>
                 Try again
               </Button>
@@ -300,7 +305,7 @@ export default function RequestsPage() {
               )}
             </div>
           ) : (
-            <ul className="max-h-[calc(100vh-18rem)] space-y-1 overflow-y-auto pr-1 lg:sticky lg:top-24">
+            <ul className="space-y-1 lg:sticky lg:top-24 lg:max-h-[calc(100vh-18rem)] lg:overflow-y-auto lg:pr-1">
               <AnimatePresence initial={false}>
                 {list.map((b) => (
                   <RequestListItem key={b.id} b={b} mode={mode} active={b.id === selectedId} onSelect={() => update({ id: b.id })} />

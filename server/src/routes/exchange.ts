@@ -1,12 +1,15 @@
 import { Router, type Request, type Response } from 'express';
-import { clerkClient, getAuth } from '@clerk/express';
-import { PrismaClient, type ExchangeBusiness, type ExchangeListing, type ExchangeBooking, type ExchangeOffer, type ExchangeReview } from '@prisma/client';
+import { z } from 'zod';
+import { type ExchangeBusiness, type ExchangeListing, type ExchangeBooking, type ExchangeOffer, type ExchangeReview } from '@prisma/client';
 import { buildLiveReport, liveSummary, type LiveDeal } from '../exchange/report.js';
 import { ensureContracts } from '../exchange/contracts.js';
 import { PhotoError, storeListingPhotos } from '../exchange/photos.js';
 
-export const prisma = new PrismaClient();
-const router = Router();
+import { prisma } from '../exchange/db.js';
+import { actorBusiness, requireActor } from '../exchange/actor.js';
+
+export { prisma };
+const router: Router = Router();
 
 for (const method of ['get', 'post', 'patch'] as const) {
   const original = router[method].bind(router);
@@ -21,37 +24,18 @@ for (const method of ['get', 'post', 'patch'] as const) {
 }
 
 const ACTIVE = ['PENDING', 'COUNTERED'];
-const AREAS = ['Andheri', 'Bandra', 'Powai', 'Lower Parel', 'Juhu', 'Vashi'] as const;
-const AREA_ANCHOR: Record<(typeof AREAS)[number], string> = {
-  Andheri: 'b09',
-  Bandra: 'b02',
-  Powai: 'b03',
-  'Lower Parel': 'b04',
-  Juhu: 'b05',
-  Vashi: 'b06',
+export const AREAS = ['Andheri', 'Bandra', 'Powai', 'Lower Parel', 'Juhu', 'Vashi'] as const;
+export type Area = (typeof AREAS)[number];
+/** Neighbourhood centres: where a new business is placed, and the origin for anonymous matching. */
+export const AREA_CENTER: Record<Area, { lat: number; lng: number }> = {
+  Andheri: { lat: 19.1136, lng: 72.8697 },
+  Bandra: { lat: 19.0596, lng: 72.8295 },
+  Powai: { lat: 19.1176, lng: 72.906 },
+  'Lower Parel': { lat: 18.9986, lng: 72.8302 },
+  Juhu: { lat: 19.1075, lng: 72.8263 },
+  Vashi: { lat: 19.0771, lng: 72.9986 },
 };
 
-async function actorBusiness(req: Request) {
-  const { userId } = getAuth(req);
-  if (!userId) return null;
-  const linked = await prisma.exchangeBusiness.findUnique({ where: { clerkUserId: userId } });
-  if (linked) return linked;
-  const clerkUser = await clerkClient.users.getUser(userId);
-  const email = clerkUser.emailAddresses[0]?.emailAddress?.toLowerCase();
-  if (!email) return null;
-  const match = await prisma.exchangeBusiness.findFirst({ where: { ownerEmail: email } });
-  if (!match) return null;
-  return prisma.exchangeBusiness.update({ where: { id: match.id }, data: { clerkUserId: userId } });
-}
-
-async function requireActor(req: Request, res: Response) {
-  const business = await actorBusiness(req);
-  if (!business) {
-    res.status(401).json({ error: 'Sign in required' });
-    return null;
-  }
-  return business;
-}
 
 function isParty(row: { seekerId: string; items: { providerId: string }[] }, businessId: string) {
   return row.seekerId === businessId || row.items.some((item) => item.providerId === businessId);
@@ -88,9 +72,51 @@ async function dealsFor(businessId: string): Promise<LiveDeal[]> {
 }
 
 const listingInclude = { business: true, photos: true } as const;
+
+const CATEGORIES = ['BANQUET_SPACE', 'CHAIRS_TABLES', 'VEHICLES', 'KITCHEN', 'AV_EQUIPMENT', 'PARKING', 'LINEN_DECOR'] as const;
+const money = z.coerce.number().finite().nonnegative();
+const count = z.coerce.number().int().nonnegative();
+const optionalMoney = z.union([money, z.null()]).optional();
+
+/** Everything a provider may set on a listing (the client's CreateResourceInput). */
+const listingFields = z.object({
+  title: z.string().trim().min(3, 'Give the listing a title').max(120),
+  category: z.enum(CATEGORIES),
+  description: z.string().trim().max(2000).default(''),
+  price: money.refine((n) => n > 0, 'Price must be more than zero'),
+  unit: z.enum(['HOUR', 'DAY', 'UNIT']),
+  quantity: count.refine((n) => n > 0, 'Quantity must be at least 1'),
+  available: count.optional(),
+  unitLabel: z.string().trim().min(1).max(40).default('units'),
+  minRentalHours: count.default(1),
+  capacity: z.union([count, z.null()]).optional(),
+  tags: z.array(z.string().trim().max(40)).max(20).default([]),
+  delivers: z.coerce.boolean().default(false),
+  deliveryBase: optionalMoney,
+  deliveryPerKm: optionalMoney,
+  status: z.enum(['ACTIVE', 'PAUSED']).default('ACTIVE'),
+  conditions: z.array(z.string().trim().max(200)).max(20).default([]),
+  cancellation: z.union([z.enum(['FLEXIBLE', 'MODERATE', 'STRICT']), z.null()]).optional(),
+  deposit: optionalMoney,
+  photos: z.array(z.object({ position: z.string(), dataUrl: z.string() })).optional(),
+});
+const listingPatch = listingFields.partial().extend({
+  // No defaults on a patch: absent means unchanged.
+  description: z.string().trim().max(2000).optional(),
+  unitLabel: z.string().trim().min(1).max(40).optional(),
+  minRentalHours: count.optional(),
+  tags: z.array(z.string().trim().max(40)).max(20).optional(),
+  delivers: z.boolean().optional(),
+  status: z.enum(['ACTIVE', 'PAUSED']).optional(),
+  conditions: z.array(z.string().trim().max(200)).max(20).optional(),
+});
+
+function invalid(res: Response, error: z.ZodError) {
+  return res.status(400).json({ error: error.issues[0]?.message ?? 'Invalid listing', code: 'VALIDATION', issues: error.issues });
+}
 const bookingInclude = {
   seeker: true,
-  items: { include: { resource: true } },
+  items: { include: { resource: { include: { photos: true } } } },
   offers: { orderBy: { round: 'asc' as const } },
   reviews: true,
 };
@@ -101,12 +127,12 @@ type ListingRow = ExchangeListing & {
 };
 type BookingRow = ExchangeBooking & {
   seeker: ExchangeBusiness;
-  items: { id: string; resourceId: string; providerId: string; quantity: number; agreedPrice: number; resource: ExchangeListing }[];
+  items: { id: string; resourceId: string; providerId: string; quantity: number; agreedPrice: number; resource: ExchangeListing & { photos: { position: string; url: string }[] } }[];
   offers: ExchangeOffer[];
   reviews: ExchangeReview[];
 };
 
-function businessJson(business: ExchangeBusiness) {
+export function businessJson(business: ExchangeBusiness) {
   return {
     id: business.id,
     name: business.name,
@@ -125,8 +151,9 @@ function businessJson(business: ExchangeBusiness) {
   };
 }
 
-function listingJson(row: ListingRow) {
-  const listing = {
+/** A listing in the client's Resource shape (without its business). */
+function resourceJson(row: Omit<ListingRow, 'business'>) {
+  return {
     id: row.id,
     businessId: row.businessId,
     title: row.title,
@@ -152,7 +179,10 @@ function listingJson(row: ListingRow) {
       .filter((photo): photo is { position: string; url: string } => Boolean(photo))
       .map((photo) => ({ position: photo.position, url: photo.url })),
   };
-  return { ...listing, business: businessJson(row.business) };
+}
+
+function listingJson(row: ListingRow) {
+  return { ...resourceJson(row), business: businessJson(row.business) };
 }
 
 function distanceKm(a: { lat: number; lng: number }, b: { lat: number; lng: number }) {
@@ -206,22 +236,7 @@ async function bookingDetail(row: BookingRow, businesses?: Map<string, ExchangeB
       quantity: item.quantity,
       agreedPrice: item.agreedPrice,
       listPrice: item.resource.price,
-      resource: {
-        id: item.resource.id,
-        businessId: item.resource.businessId,
-        title: item.resource.title,
-        category: item.resource.category,
-        description: item.resource.description,
-        price: item.resource.price,
-        unit: item.resource.unit,
-        quantity: item.resource.quantity,
-        available: item.resource.available,
-        unitLabel: item.resource.unitLabel,
-        minRentalHours: item.resource.minRentalHours,
-        tags: item.resource.tags,
-        delivers: item.resource.delivers,
-        status: item.resource.status,
-      },
+      resource: resourceJson(item.resource),
     })),
     items: row.items.map((item) => ({
       resourceId: item.resourceId,
@@ -340,7 +355,9 @@ router.get('/resources/:id', async (req, res) => {
 router.post('/resources', async (req, res) => {
   const actor = await requireActor(req, res);
   if (!actor) return;
-  const body = req.body ?? {};
+  const parsed = listingFields.safeParse(req.body ?? {});
+  if (!parsed.success) return invalid(res, parsed.error);
+  const body = parsed.data;
   const id = `r${Date.now().toString(36)}`;
   let photos;
   try {
@@ -355,20 +372,20 @@ router.post('/resources', async (req, res) => {
       businessId: actor.id,
       title: body.title,
       category: body.category,
-      description: body.description ?? '',
-      price: Number(body.price),
+      description: body.description,
+      price: body.price,
       unit: body.unit,
-      quantity: Number(body.quantity),
-      available: Number(body.available ?? body.quantity),
-      unitLabel: body.unitLabel ?? 'units',
-      minRentalHours: Number(body.minRentalHours ?? 1),
+      quantity: body.quantity,
+      available: Math.min(body.available ?? body.quantity, body.quantity),
+      unitLabel: body.unitLabel,
+      minRentalHours: body.minRentalHours,
       capacity: body.capacity ?? null,
-      tags: body.tags ?? [],
-      delivers: Boolean(body.delivers),
+      tags: body.tags,
+      delivers: body.delivers,
       deliveryBase: body.deliveryBase ?? null,
       deliveryPerKm: body.deliveryPerKm ?? null,
-      status: body.status ?? 'ACTIVE',
-      conditions: body.conditions ?? [],
+      status: body.status,
+      conditions: body.conditions,
       cancellation: body.cancellation ?? null,
       deposit: body.deposit ?? null,
       photos: { create: photos },
@@ -381,12 +398,14 @@ router.post('/resources', async (req, res) => {
 router.patch('/resources/:id', async (req, res) => {
   const actor = await requireActor(req, res);
   if (!actor) return;
-  const patch = req.body ?? {};
+  const parsed = listingPatch.safeParse(req.body ?? {});
+  if (!parsed.success) return invalid(res, parsed.error);
+  const { photos: newPhotos, ...patch } = parsed.data;
   const existing = await prisma.exchangeListing.findUnique({ where: { id: req.params.id } });
   if (!existing || existing.businessId !== actor.id) return res.status(404).json({ error: 'Resource not found' });
-  if (Array.isArray(patch.photos)) {
+  if (newPhotos) {
     try {
-      const photos = await storeListingPhotos(existing.id, patch.photos);
+      const photos = await storeListingPhotos(existing.id, newPhotos);
       await prisma.exchangeListingPhoto.deleteMany({ where: { listingId: existing.id } });
       await prisma.exchangeListingPhoto.createMany({ data: photos.map((photo) => ({ ...photo, listingId: existing.id })) });
     } catch (error) {
@@ -396,15 +415,8 @@ router.patch('/resources/:id', async (req, res) => {
   }
   const row = await prisma.exchangeListing.update({
     where: { id: req.params.id },
-    data: {
-      ...(patch.title !== undefined ? { title: patch.title } : {}),
-      ...(patch.description !== undefined ? { description: patch.description } : {}),
-      ...(patch.price !== undefined ? { price: Number(patch.price) } : {}),
-      ...(patch.quantity !== undefined ? { quantity: Number(patch.quantity) } : {}),
-      ...(patch.available !== undefined ? { available: Number(patch.available) } : {}),
-      ...(patch.status !== undefined ? { status: patch.status } : {}),
-      ...(patch.tags !== undefined ? { tags: patch.tags } : {}),
-    },
+    // Every field the client can edit; undefined keys are left unchanged by Prisma.
+    data: patch,
     include: listingInclude,
   });
   res.json(listingJson(row));
@@ -413,13 +425,20 @@ router.patch('/resources/:id', async (req, res) => {
 router.post('/matches', async (req, res) => {
   const requirement = req.body ?? {};
   const actor = await actorBusiness(req);
-  const originId = actor?.id ?? (requirement.area ? AREA_ANCHOR[requirement.area as (typeof AREAS)[number]] : 'b02');
-  const origin = actor ?? (await prisma.exchangeBusiness.findUnique({ where: { id: originId } }));
+  // Same origin the client draws on the map: the chosen area, else the business's own address, else Bandra.
+  const area = (AREAS as readonly string[]).includes(requirement.area) ? (requirement.area as Area) : null;
+  const origin = area ? AREA_CENTER[area] : actor ?? AREA_CENTER.Bandra;
   const rows = await prisma.exchangeListing.findMany({
-    where: { category: requirement.category, available: { gt: 0 }, status: 'ACTIVE' },
+    where: {
+      category: requirement.category,
+      available: { gt: 0 },
+      status: 'ACTIVE',
+      // Never offer someone their own listings.
+      ...(actor ? { businessId: { not: actor.id } } : {}),
+    },
     include: listingInclude,
   });
-  if (!origin || rows.length === 0) return res.json([]);
+  if (rows.length === 0) return res.json([]);
 
   const hours = Math.max(1, (new Date(requirement.endAt).getTime() - new Date(requirement.startAt).getTime()) / 36e5);
   const prices = rows.map((row) => row.price);

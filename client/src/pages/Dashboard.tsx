@@ -7,10 +7,10 @@ import { RequestInbox } from "@/components/dashboard/RequestInbox";
 import { ActiveRequests, SavedSearches } from "@/components/dashboard/SeekerPanels";
 import { ResourceWizard } from "@/components/dashboard/wizard/ResourceWizard";
 import { Button } from "@/components/ui/button";
-import { useAnalytics, useBookings, useMyResources, useSavedSearches } from "@/hooks/queries";
+import { useAnalytics, useSavedSearches } from "@/hooks/queries";
 import type { AnalyticsRange, MyResource } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { useAppStore } from "@/store/app";
+import { useAccount, useMode } from "@/hooks/account";
 
 const RANGES: AnalyticsRange[] = ["7d", "30d", "90d"];
 
@@ -20,15 +20,12 @@ function greeting() {
 }
 
 export default function DashboardPage() {
-  const mode = useAppStore((s) => s.mode);
+  const mode = useMode();
   const [range, setRange] = useState<AnalyticsRange>("30d");
   const analytics = useAnalytics(range);
   const saved = useSavedSearches();
 
-  // Names come from whichever data this mode already loads.
-  const myResources = useMyResources();
-  const seekerBookings = useBookings("seeker");
-  const name = mode === "provider" ? myResources.data?.[0]?.business.name : seekerBookings.data?.[0]?.seeker.name;
+  const name = useAccount().business?.name;
 
   const [wizardOpen, setWizardOpen] = useState(false);
   const [editing, setEditing] = useState<MyResource | undefined>();
@@ -47,7 +44,7 @@ export default function DashboardPage() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Dashboard · {mode === "provider" ? "Provider" : "Seeker"}</p>
-          <h1 className="mt-2 text-4xl leading-[1.05] tracking-tightest md:text-5xl">
+          <h1 className="mt-2 text-[clamp(1.75rem,0.9rem+4vw,2.25rem)] leading-[1.05] tracking-tightest [overflow-wrap:anywhere] md:text-5xl">
             {greeting()}
             {name ? (
               <>

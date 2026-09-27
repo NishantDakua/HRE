@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { PrismaClient, VerificationStatus, FulfillmentStatus } from '@prisma/client';
 
-const router = Router();
+const router: Router = Router();
 const prisma = new PrismaClient();
 
 const ALLOWED_MONTHS = [3, 6, 12];

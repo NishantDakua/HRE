@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { forwardRef, useMemo, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -12,6 +12,7 @@ import { ACTIONABLE } from "@/lib/bookings";
 import type { BookingDetail } from "@/lib/types";
 import { cn, formatINR } from "@/lib/utils";
 import { formatWindow } from "./format";
+import { DevErrorDetail } from "@/components/DevErrorDetail";
 
 /* ------------------------------------------------------------------ */
 /* Counter form                                                        */
@@ -124,7 +125,8 @@ function PriceCompare({ offered, list }: { offered: number; list: number }) {
   );
 }
 
-function RequestRow({ booking: b }: { booking: BookingDetail }) {
+/** Forwards its ref: AnimatePresence mode="popLayout" measures exiting rows. */
+const RequestRow = forwardRef<HTMLLIElement, { booking: BookingDetail }>(function RequestRow({ booking: b }, ref) {
   const respond = useRespondBooking();
   const [countering, setCountering] = useState(false);
   const actionable = ACTIONABLE.includes(b.status);
@@ -132,6 +134,7 @@ function RequestRow({ booking: b }: { booking: BookingDetail }) {
 
   return (
     <motion.li
+      ref={ref}
       layout
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
@@ -146,9 +149,9 @@ function RequestRow({ booking: b }: { booking: BookingDetail }) {
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="inline-flex items-center gap-1 text-sm font-medium text-text">
-                {b.seeker.name}
-                {b.seeker.verified && <BadgeCheck className="size-3.5 text-primary" aria-label="Verified" />}
+              <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-sm font-medium text-text">
+                <span className="truncate">{b.seeker.name}</span>
+                {b.seeker.verified && <BadgeCheck className="size-3.5 shrink-0 text-primary" aria-label="Verified" />}
               </span>
               {b.urgent ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-conflict px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-card">
@@ -213,7 +216,7 @@ function RequestRow({ booking: b }: { booking: BookingDetail }) {
       </AnimatePresence>
     </motion.li>
   );
-}
+});
 
 /* ------------------------------------------------------------------ */
 /* Inbox                                                               */
@@ -222,7 +225,7 @@ function RequestRow({ booking: b }: { booking: BookingDetail }) {
 type Tab = "action" | "all";
 
 export function RequestInbox() {
-  const { data, isPending, isError, refetch } = useBookings("provider");
+  const { data, isPending, isError, error, refetch } = useBookings("provider");
   const [tab, setTab] = useState<Tab>("action");
 
   const sorted = useMemo(() => {
@@ -271,8 +274,9 @@ export function RequestInbox() {
           ))}
         </div>
       ) : isError ? (
-        <div className="surface space-y-3 p-6">
+        <div className="surface space-y-3 p-6" data-testid="error-state">
           <p className="text-text">Couldn&apos;t load requests.</p>
+          <DevErrorDetail error={error} />
           <Button size="sm" variant="outline" onClick={() => refetch()}>
             Try again
           </Button>

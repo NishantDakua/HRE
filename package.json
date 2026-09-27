@@ -16,12 +16,18 @@
     "db:generate": "pnpm --filter hre-server prisma:generate",
     "db:push": "pnpm --filter hre-server prisma:push",
     "db:seed": "pnpm --filter hre-server prisma:seed",
-    "db:migrate": "pnpm --filter hre-server prisma:migrate"
+    "db:migrate": "pnpm --filter hre-server prisma:migrate",
+    "db:constraints": "pnpm --filter hre-server db:constraints",
+    "db:backup": "pnpm --filter hre-server db:backup"
   },
   "pnpm": {
     "overrides": {
       "three": "0.169.0",
       "@types/three": "0.169.0"
     }
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "server": "^1.0.42"
   }
 }

@@ -199,3 +199,50 @@ html.lenis body {
     box-shadow: none;
   }
 }
+
+/* ------------------------------------------------------------------ */
+/* Touch (coarse pointer: phones, tablets). Mouse/desktop is untouched. */
+/* ------------------------------------------------------------------ */
+@layer base {
+  @media (pointer: coarse) {
+    /* 44×44px minimum tap targets (WCAG 2.5.5). :where() keeps specificity at zero so components can
+       still size themselves; min-height has no effect on inline text links, which stay exempt. */
+    :where(button, [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"], [role="option"], [role="menuitem"], summary, select, a[href]) {
+      min-height: 44px;
+    }
+    :where(button, [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"], [role="menuitem"]) {
+      min-width: 44px;
+    }
+    :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]), textarea) {
+      min-height: 44px;
+    }
+    /* 16px+ in fields stops iOS Safari zooming in on focus. */
+    input,
+    select,
+    textarea {
+      font-size: max(16px, 1em) !important;
+    }
+    /* Leaflet's zoom buttons are 30px by default. */
+    .leaflet-touch .leaflet-bar a {
+      width: 44px;
+      height: 44px;
+      line-height: 44px;
+    }
+  }
+}
+
+/* Space for the phone tab bar (and the home indicator) at the bottom of every page. */
+@layer utilities {
+  .pb-tabbar {
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  }
+  .bottom-above-tabbar {
+    bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  }
+  .bottom-tabbar {
+    bottom: calc(4.25rem + env(safe-area-inset-bottom) + 0.75rem);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

@@ -385,10 +385,12 @@ export function RequestSheet({ resource: r, prepared }: RequestSheetProps) {
               </div>
             </dl>
 
-            <Button type="submit" size="lg" className="w-full" disabled={create.isPending}>
-              {create.isPending ? "Sending…" : `Send request · ₹${formatINR(q.total)}`}
-            </Button>
-            <p className="text-center text-[11px] text-muted">No charge until {r.business.name} confirms.</p>
+            <div className="sticky bottom-0 -mx-4 space-y-2 border-t border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3 lg:static lg:mx-0 lg:space-y-4 lg:border-0 lg:bg-transparent lg:p-0">
+              <Button type="submit" size="lg" className="w-full" disabled={create.isPending}>
+                {create.isPending ? "Sending…" : `Send request · ₹${formatINR(q.total)}`}
+              </Button>
+              <p className="text-center text-[11px] text-muted">No charge until {r.business.name} confirms.</p>
+            </div>
           </motion.form>
         )}
       </AnimatePresence>
