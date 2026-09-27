@@ -480,3 +480,27 @@ export interface HandoverContract {
   viewerRole: "PROVIDER" | "SEEKER" | null;
   viewerHasScanned: boolean;
 }
+
+export interface UnitCode {
+  code: string;
+  label: string;
+}
+
+export interface UnitSummary {
+  dispatched: (UnitCode & { status: string })[];
+  received: UnitCode[];
+  returned: UnitCode[];
+  damaged: (UnitCode & { phase: string })[];
+  missingOnArrival: UnitCode[];
+  missingOnReturn: UnitCode[];
+  photos: { id: string; phase: string; kind: string; imageUrl: string; codes: UnitCode[] }[];
+}
+
+export interface ListingUnits {
+  id: string;
+  title: string;
+  quantity: number;
+  available: number;
+  unitLabel: string;
+  units: (UnitCode & { id: string; status: string })[];
+}

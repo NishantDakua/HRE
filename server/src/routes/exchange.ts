@@ -4,6 +4,7 @@ import { PrismaClient, type ExchangeBusiness, type ExchangeListing, type Exchang
 import { buildLiveReport, liveSummary, type LiveDeal } from '../exchange/report.js';
 import { ensureContracts } from '../exchange/contracts.js';
 import { PhotoError, storeListingPhotos } from '../exchange/photos.js';
+import { ensureUnits, UnitError } from '../exchange/units.js';
 
 export const prisma = new PrismaClient();
 const router = Router();
@@ -375,6 +376,7 @@ router.post('/resources', async (req, res) => {
     },
     include: listingInclude,
   });
+  await ensureUnits(prisma, row.id);
   res.status(201).json(listingJson(row));
 });
 
@@ -407,7 +409,33 @@ router.patch('/resources/:id', async (req, res) => {
     },
     include: listingInclude,
   });
-  res.json(listingJson(row));
+  if (patch.quantity !== undefined) await ensureUnits(prisma, row.id);
+  const fresh = patch.quantity !== undefined
+    ? await prisma.exchangeListing.findUnique({ where: { id: row.id }, include: listingInclude })
+    : row;
+  res.json(listingJson(fresh ?? row));
+});
+
+router.get('/resources/:id/units', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
+  const listing = await prisma.exchangeListing.findUnique({ where: { id: req.params.id } });
+  if (!listing || listing.businessId !== actor.id) return res.status(404).json({ error: 'Resource not found' });
+  try {
+    const units = await ensureUnits(prisma, listing.id);
+    const fresh = await prisma.exchangeListing.findUnique({ where: { id: listing.id } });
+    res.json({
+      id: listing.id,
+      title: listing.title,
+      quantity: fresh?.quantity ?? listing.quantity,
+      available: fresh?.available ?? listing.available,
+      unitLabel: listing.unitLabel,
+      units,
+    });
+  } catch (error) {
+    if (error instanceof UnitError) return res.status(error.status).json({ error: error.message });
+    throw error;
+  }
 });
 
 router.post('/matches', async (req, res) => {

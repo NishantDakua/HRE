@@ -6,6 +6,7 @@ import AnalyticsPage from "@/pages/Analytics";
 import ContractPage from "@/pages/Contract";
 import DashboardPage from "@/pages/Dashboard";
 import HandoverPage from "@/pages/Handover";
+import LabelsPage from "@/pages/Labels";
 import DiscoverPage from "@/pages/Discover";
 import LandingPage from "@/pages/Landing";
 import NotFoundPage from "@/pages/NotFound";
@@ -33,6 +34,7 @@ export const router = createBrowserRouter([
               { path: "analytics", element: <AnalyticsPage /> },
               { path: "contract/:id", element: <ContractPage /> },
               { path: "handover/:id", element: <HandoverPage /> },
+              { path: "labels/:id", element: <LabelsPage /> },
             ],
           },
           { path: "*", element: <NotFoundPage /> },

@@ -146,7 +146,10 @@ export default function ContractPage() {
   }
 
   const dispatchSigned = data.signatures.some((signature) => signature.purpose === "DISPATCH");
-  const providerSigning = data.viewerRole === "PROVIDER" && data.phase === "DISPATCH";
+  const receiptSigned = data.signatures.some((signature) => signature.purpose === "RECEIPT");
+  const openDispute = data.disputes.some((dispute) => dispute.status === "OPEN");
+  const providerSigning = data.viewerRole === "PROVIDER" && !dispatchSigned;
+  const seekerSigning = data.viewerRole === "SEEKER" && dispatchSigned && !receiptSigned && !openDispute;
 
   return (
     <div className="space-y-8">
@@ -186,6 +189,37 @@ export default function ContractPage() {
             </label>
           ) : (
             <p className="text-sm text-muted">Waiting for {data.provider.name} to sign at dispatch.</p>
+          )}
+        </div>
+
+        <div className="surface space-y-3 p-5">
+          <h2 className="font-display text-xl">Receipt signature</h2>
+          <p className="text-sm text-muted">The seeker prints this page, signs it on paper when the order arrives, and uploads a photo of that signed page.</p>
+          {receiptSigned ? (
+            <p className="text-sm">The receipt page is signed.</p>
+          ) : seekerSigning ? (
+            <label className="block text-sm">
+              Photo of the signed page
+              <input
+                className="mt-1 block w-full text-sm"
+                type="file"
+                accept="image/*"
+                disabled={sign.isPending}
+                onChange={async (event) => {
+                  const file = event.target.files?.[0];
+                  event.target.value = "";
+                  if (!file) return;
+                  const dataUrl = await fileToJpeg(file);
+                  sign.mutate({ id: data.id, purpose: "RECEIPT", dataUrl });
+                }}
+              />
+            </label>
+          ) : data.viewerRole === "SEEKER" && openDispute ? (
+            <p className="text-sm text-muted">Upload the signed page after both sides agree on the open dispute.</p>
+          ) : data.viewerRole === "SEEKER" ? (
+            <p className="text-sm text-muted">Waiting for {data.provider.name} to sign at dispatch.</p>
+          ) : (
+            <p className="text-sm text-muted">{data.seeker.name} uploads this from their account when they receive the order.</p>
           )}
         </div>
       </section>

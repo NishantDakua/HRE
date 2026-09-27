@@ -1,11 +1,7 @@
 import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { ImageStoreError, isKeptImageUrl, uploadJpeg } from './images.js';
 
 export const PHOTO_POSITIONS = ['FRONT', 'SIDE', 'IN_PLACE'] as const;
-
-const uploadDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads/listings');
 
 export class PhotoError extends Error {
   status = 400;
@@ -16,14 +12,13 @@ export async function storeListingPhotos(listingId: string, photos: { position?:
     throw new PhotoError('Three live photos are required: front, side, and where it sits.');
   }
 
-  await mkdir(uploadDir, { recursive: true });
   const hashes = new Set<string>();
   const saved: { position: string; url: string }[] = [];
 
   for (const position of PHOTO_POSITIONS) {
     const photo = photos.find((item) => item.position === position);
     const dataUrl = photo?.dataUrl ?? '';
-    if (dataUrl.startsWith('/api/uploads/listings/')) {
+    if (isKeptImageUrl(dataUrl)) {
       saved.push({ position, url: dataUrl });
       continue;
     }
@@ -36,9 +31,13 @@ export async function storeListingPhotos(listingId: string, photos: { position?:
     const hash = createHash('sha256').update(buffer).digest('hex');
     if (hashes.has(hash)) throw new PhotoError('Those photos are the same shot. Move and photograph the item from the other position.');
     hashes.add(hash);
-    const filename = `${listingId}-${position.toLowerCase()}.jpg`;
-    await writeFile(path.join(uploadDir, filename), buffer);
-    saved.push({ position, url: `/api/uploads/listings/${filename}` });
+    try {
+      const url = await uploadJpeg(buffer, 'listings', `${listingId}-${position.toLowerCase()}`);
+      saved.push({ position, url });
+    } catch (error) {
+      if (error instanceof ImageStoreError) throw new PhotoError(error.message);
+      throw new PhotoError('The photo did not save. Try that shot again.');
+    }
   }
 
   return saved;

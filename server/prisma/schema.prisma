@@ -471,6 +471,7 @@ model ExchangeListing {
   cancellation   String?
   deposit        Float?
   photos         ExchangeListingPhoto[]
+  units          ExchangeUnit[]
   items          ExchangeBookingItem[]
 
   @@index([businessId])
@@ -562,10 +563,53 @@ model ExchangeContract {
   signatures ExchangeContractSignature[]
   scans      ExchangeContractScan[]
   disputes   ExchangeDispute[]
+  unitPhotos ExchangeHandoverPhoto[]
 
   @@unique([bookingId, providerId])
   @@index([seekerId])
   @@index([providerId])
+}
+
+model ExchangeUnit {
+  id        String   @id @default(cuid())
+  code      String   @unique
+  label     String
+  listingId String
+  listing   ExchangeListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  status    String   @default("IN_STOCK")
+  createdAt DateTime @default(now())
+  reads     ExchangeUnitRead[]
+
+  @@unique([listingId, label])
+  @@index([listingId])
+  @@index([status])
+}
+
+model ExchangeHandoverPhoto {
+  id         String   @id @default(cuid())
+  contractId String
+  contract   ExchangeContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  phase      String
+  kind       String   @default("LABEL")
+  imageUrl   String
+  createdAt  DateTime @default(now())
+  reads      ExchangeUnitRead[]
+
+  @@index([contractId])
+}
+
+model ExchangeUnitRead {
+  id         String   @id @default(cuid())
+  unitId     String
+  unit       ExchangeUnit @relation(fields: [unitId], references: [id], onDelete: Cascade)
+  photoId    String
+  photo      ExchangeHandoverPhoto @relation(fields: [photoId], references: [id], onDelete: Cascade)
+  contractId String
+  phase      String
+  createdAt  DateTime @default(now())
+
+  @@unique([unitId, contractId, phase])
+  @@index([contractId, phase])
 }
 
 model ExchangeContractSignature {

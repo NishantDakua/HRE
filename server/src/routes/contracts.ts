@@ -1,6 +1,7 @@
 import { Router, type Request, type Response } from 'express';
 import { clerkClient, getAuth } from '@clerk/express';
 import { ContractError, ensureContracts, presentContract, quoteByNature, saveScan } from '../exchange/contracts.js';
+import { markMissing, recordUnitPhoto, unitSummary, UnitError } from '../exchange/units.js';
 import { prisma } from './exchange.js';
 const router = Router();
 
@@ -116,11 +117,27 @@ router.post('/contracts/:id/approve', async (req, res) => {
     if (Date.now() > contract.arrivedAt.getTime() + 60 * 60 * 1000) {
       return res.status(400).json({ error: 'The hour after arrival has passed.' });
     }
+    const summary = await unitSummary(prisma, contract.id);
+    const lines = contract.lines as { resourceId: string; quantity: number }[];
+    const booked = lines.reduce((sum, line) => sum + line.quantity, 0);
+    const unitCount = await prisma.exchangeUnit.count({ where: { listingId: { in: [...new Set(lines.map((line) => line.resourceId))] } } });
+    if (unitCount > 0 && summary.dispatched.length === 0) {
+      return res.status(400).json({ error: 'The provider has not photographed the labels on the units that left.' });
+    }
+    if (summary.dispatched.length && (summary.missingOnArrival.length || summary.received.length < booked)) {
+      return res.status(400).json({ error: 'Some booked units are not in the arrival photos. Add another photo, or raise a short-delivery dispute.' });
+    }
     await prisma.exchangeContract.update({ where: { id: contract.id }, data: { seekerApprovedAt: new Date() } });
+    await markMissing(prisma, contract.id, 'RECEIPT');
   } else {
     if (!receiptSettled(contract)) return res.status(400).json({ error: 'The seeker has not finished receiving the order.' });
     if (!contract.returnedAt) return res.status(400).json({ error: 'Scan the QR when the goods come back, then approve them.' });
+    const summary = await unitSummary(prisma, contract.id);
+    if (summary.dispatched.length && summary.missingOnReturn.length) {
+      return res.status(400).json({ error: 'Some sent labels are not in the return photos. Add another photo, or raise a missing-return dispute.' });
+    }
     await prisma.exchangeContract.update({ where: { id: contract.id }, data: { providerApprovedAt: new Date() } });
+    await markMissing(prisma, contract.id, 'RETURN');
   }
   res.json(await presentContract(prisma, contract.id, originOf(req), actor.id));
 });
@@ -138,7 +155,6 @@ router.post('/contracts/:id/sign', async (req, res) => {
     if (!contract.signatures.some((signature) => signature.purpose === 'DISPATCH')) {
       return res.status(400).json({ error: 'The provider has not signed the dispatch copy yet.' });
     }
-    if (!contract.arrivedAt) return res.status(400).json({ error: 'Scan the contract QR when the order arrives, then sign.' });
     if (contract.disputes.some((dispute) => dispute.status === 'OPEN')) {
       return res.status(400).json({ error: 'Sign the hard copy after both sides agree on the open dispute.' });
     }
@@ -191,8 +207,20 @@ router.post('/contracts/:id/disputes', async (req, res) => {
   if (note.length < 3) return res.status(400).json({ error: 'Say what happened.' });
   const lines = contract.lines as { quantity: number }[];
   const booked = lines.reduce((sum, line) => sum + line.quantity, 0);
-  const receivedQuantity = req.body?.receivedQuantity === undefined ? null : Number(req.body.receivedQuantity);
-  const damagedQuantity = req.body?.damagedQuantity === undefined ? null : Number(req.body.damagedQuantity);
+  const summary = await unitSummary(prisma, contract.id);
+  const tracked = summary.dispatched.length > 0;
+  let receivedQuantity = req.body?.receivedQuantity === undefined ? null : Number(req.body.receivedQuantity);
+  let damagedQuantity = req.body?.damagedQuantity === undefined ? null : Number(req.body.damagedQuantity);
+  if (tracked && (nature === 'SHORT_DELIVERY' || (phase === 'RECEIPT' && nature === 'OTHER'))) {
+    receivedQuantity = summary.received.length;
+  }
+  if (tracked && nature === 'MISSING_ON_RETURN') {
+    damagedQuantity = summary.missingOnReturn.length;
+  }
+  if (tracked && (nature === 'DAMAGED_ON_ARRIVAL' || nature === 'WRONG_ITEMS' || nature === 'DAMAGED_ON_RETURN')) {
+    damagedQuantity = summary.damaged.filter((unit) => unit.phase === phase).length;
+    if (!damagedQuantity) return res.status(400).json({ error: 'Mark the damaged units on the photos before opening this dispute.' });
+  }
   const needsReceived = phase === 'RECEIPT' && (nature === 'SHORT_DELIVERY' || nature === 'OTHER');
   const needsDamaged = nature === 'DAMAGED_ON_ARRIVAL' || nature === 'WRONG_ITEMS' || phase === 'RETURN';
   if (needsReceived && (receivedQuantity === null || receivedQuantity < 0 || receivedQuantity > booked)) {
@@ -245,6 +273,32 @@ router.post('/contracts/:id/disputes/:disputeId/agree', async (req, res) => {
     data: { ...data, status: next.seekerAgreed && next.providerAgreed ? 'AGREED' : 'OPEN' },
   });
   res.json(await presentContract(prisma, contract.id, originOf(req), actor.id));
+});
+
+router.get('/contracts/:id/units', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
+  const contract = await loadParty(req.params.id, actor.id);
+  if (!contract) return res.status(404).json({ error: 'Contract not found' });
+  res.json(await unitSummary(prisma, contract.id));
+});
+
+router.post('/contracts/:id/units', async (req, res) => {
+  const actor = await requireActor(req, res);
+  if (!actor) return;
+  const phase = req.body?.phase;
+  const kind = req.body?.kind === 'DAMAGE' ? 'DAMAGE' : 'LABEL';
+  if (phase !== 'DISPATCH' && phase !== 'RECEIPT' && phase !== 'RETURN') {
+    return res.status(400).json({ error: 'Choose dispatch, receipt, or return.' });
+  }
+  const codes = Array.isArray(req.body?.codes) ? req.body.codes.map((code: unknown) => String(code)) : [];
+  try {
+    const result = await recordUnitPhoto(prisma, req.params.id, actor.id, phase, kind, String(req.body?.dataUrl ?? ''), codes);
+    res.status(201).json(result);
+  } catch (error) {
+    if (error instanceof UnitError) return res.status(error.status).json({ error: error.message });
+    throw error;
+  }
 });
 
 export default router;

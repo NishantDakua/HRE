@@ -27,6 +27,8 @@ import type {
   SavedSearch,
   UpdateResourceInput,
   HandoverContract,
+  ListingUnits,
+  UnitSummary,
 } from "@/lib/types";
 
 const USE_MOCK = import.meta.env.VITE_USE_MOCK === "true";
@@ -455,6 +457,53 @@ export function useOpenDispute() {
       toast.success("Dispute opened", { description: "It closes when both sides agree." });
     },
     onError: (e) => toast.error("Couldn't open the dispute", { description: apiErrorMessage(e) }),
+  });
+}
+
+export function useListingUnits(id: string | undefined) {
+  return useQuery({
+    queryKey: ["units", id ?? ""],
+    queryFn: () => data(api.get<ListingUnits>(`/resources/${id}/units`)),
+    enabled: Boolean(id) && !USE_MOCK,
+  });
+}
+
+export function useContractUnits(id: string | undefined) {
+  return useQuery({
+    queryKey: ["contract-units", id ?? ""],
+    queryFn: () => data(api.get<UnitSummary>(`/contracts/${id}/units`)),
+    enabled: Boolean(id) && !USE_MOCK,
+  });
+}
+
+export function useSaveUnitPhoto() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      phase: "DISPATCH" | "RECEIPT" | "RETURN";
+      kind: "LABEL" | "DAMAGE";
+      dataUrl: string;
+      codes: string[];
+    }) =>
+      data(
+        api.post<{ accepted: { code: string; label: string }[]; unknown: string[]; skipped: string[]; summary: UnitSummary }>(
+          `/contracts/${id}/units`,
+          body
+        )
+      ),
+    onSuccess: (result, body) => {
+      qc.setQueryData(["contract-units", body.id], result.summary);
+      qc.invalidateQueries({ queryKey: queryKeys.contract(body.id) });
+      const read = result.accepted.length;
+      toast.success(read ? `Read ${read} label${read === 1 ? "" : "s"}` : "Photo saved", {
+        description: result.unknown.length ? `${result.unknown.length} codes in the photo are not on this order.` : undefined,
+      });
+    },
+    onError: (e) => toast.error("Couldn't save that photo", { description: apiErrorMessage(e) }),
   });
 }
 

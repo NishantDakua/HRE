@@ -102,9 +102,14 @@ export function ListingsTable({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r
                         )}
                       </div>
                     </div>
-                    <Button size="sm" variant="ghost" onClick={() => onEdit(r)} aria-label={`Edit ${r.title}`}>
-                      <Pencil />
-                    </Button>
+                    <div className="flex items-center gap-1">
+                      <Link to={`/labels/${r.id}`} className="text-xs text-muted hover:text-text">
+                        Labels
+                      </Link>
+                      <Button size="sm" variant="ghost" onClick={() => onEdit(r)} aria-label={`Edit ${r.title}`}>
+                        <Pencil />
+                      </Button>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-xs">
                     <div>
@@ -189,9 +194,14 @@ export function ListingsTable({ onAdd, onEdit }: { onAdd: () => void; onEdit: (r
                         <StatusToggle resource={r} />
                       </td>
                       <td className="px-4 py-3 text-right">
-                        <Button size="sm" variant="ghost" onClick={() => onEdit(r)} aria-label={`Edit ${r.title}`}>
-                          <Pencil /> Edit
-                        </Button>
+                        <div className="flex items-center justify-end gap-1">
+                          <Link to={`/labels/${r.id}`} className="px-2 text-xs text-muted hover:text-text">
+                            Labels
+                          </Link>
+                          <Button size="sm" variant="ghost" onClick={() => onEdit(r)} aria-label={`Edit ${r.title}`}>
+                            <Pencil /> Edit
+                          </Button>
+                        </div>
                       </td>
                     </tr>
                   );

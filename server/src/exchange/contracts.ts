@@ -1,14 +1,10 @@
-import { createHash } from 'node:crypto';
-import { mkdir, writeFile } from 'node:fs/promises';
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 import QRCode from 'qrcode';
 import type { PrismaClient } from '@prisma/client';
+import { ImageStoreError, uploadJpeg } from './images.js';
 
 const HOUR = 60 * 60 * 1000;
 const ACCEPTED = ['ACCEPTED', 'CONFIRMED', 'IN_USE', 'COMPLETED'];
 const SEVERITY_RATE: Record<string, number> = { MINOR: 0.25, MODERATE: 0.5, SEVERE: 1 };
-const uploadDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../uploads/contracts');
 
 export class ContractError extends Error {
   status: number;
@@ -92,10 +88,12 @@ async function saveScan(dataUrl: string, contractId: string, purpose: string) {
   if (!match) throw new ContractError(400, 'Upload a photo or scan of the signed page.');
   const buffer = Buffer.from(match[1].replace(/\s/g, ''), 'base64');
   if (buffer.length < 5_000 || buffer.length > 2_500_000) throw new ContractError(400, 'That scan could not be read. Take the photo again.');
-  await mkdir(uploadDir, { recursive: true });
-  const filename = `${contractId}-${purpose.toLowerCase()}-${createHash('sha256').update(buffer).digest('hex').slice(0, 10)}.jpg`;
-  await writeFile(path.join(uploadDir, filename), buffer);
-  return `/api/uploads/contracts/${filename}`;
+  try {
+    return await uploadJpeg(buffer, 'contracts', `${contractId}-${purpose.toLowerCase()}`);
+  } catch (error) {
+    if (error instanceof ImageStoreError) throw new ContractError(400, error.message);
+    throw new ContractError(400, 'That signed page did not save. Take the photo again.');
+  }
 }
 
 const include = { signatures: true, scans: true, disputes: { orderBy: { createdAt: 'asc' as const } } };

@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { format, parseISO } from "date-fns";
+import { UnitScan } from "@/components/handover/UnitScan";
 import { Button } from "@/components/ui/button";
-import { useAgreeDispute, useApproveHandover, useContract, useOpenDispute, useRecordArrival } from "@/hooks/queries";
+import { useAgreeDispute, useApproveHandover, useContract, useContractUnits, useOpenDispute, useRecordArrival } from "@/hooks/queries";
 import type { HandoverContract } from "@/lib/types";
 import { formatINR } from "@/lib/utils";
 
@@ -27,15 +28,19 @@ const PROVIDER_NATURES = [
 
 function DisputeForm({ contract }: { contract: HandoverContract }) {
   const open = useOpenDispute();
+  const { data: summary } = useContractUnits(contract.id);
   const receiving = contract.viewerRole === "SEEKER";
   const natures = receiving ? SEEKER_NATURES : PROVIDER_NATURES;
   const [nature, setNature] = useState(natures[0].id);
   const [note, setNote] = useState("");
   const [count, setCount] = useState("");
   const [severity, setSeverity] = useState<"MINOR" | "MODERATE" | "SEVERE">("MINOR");
+  const tracked = (summary?.dispatched.length ?? 0) > 0;
   const countIsReceived = receiving && (nature === "SHORT_DELIVERY" || nature === "OTHER");
   const countIsAffected = !countIsReceived;
   const showSeverity = !receiving && nature !== "MISSING_ON_RETURN";
+  const damageCount = summary?.damaged.filter((unit) => unit.phase === (receiving ? "RECEIPT" : "RETURN")).length ?? 0;
+  const needsMarkedDamage = tracked && (nature === "DAMAGED_ON_ARRIVAL" || nature === "WRONG_ITEMS" || nature === "DAMAGED_ON_RETURN");
 
   return (
     <form
@@ -46,8 +51,14 @@ function DisputeForm({ contract }: { contract: HandoverContract }) {
           id: contract.id,
           nature,
           note,
-          receivedQuantity: countIsReceived ? Number(count) : undefined,
-          damagedQuantity: countIsAffected ? Number(count) : undefined,
+          receivedQuantity: countIsReceived ? (tracked ? summary?.received.length ?? 0 : Number(count)) : undefined,
+          damagedQuantity: countIsAffected
+            ? tracked
+              ? nature === "MISSING_ON_RETURN"
+                ? summary?.missingOnReturn.length ?? 0
+                : damageCount
+              : Number(count)
+            : undefined,
           severity: showSeverity ? severity : undefined,
         });
       }}
@@ -66,10 +77,21 @@ function DisputeForm({ contract }: { contract: HandoverContract }) {
         What happened
         <textarea className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2" rows={3} value={note} onChange={(event) => setNote(event.target.value)} required minLength={3} />
       </label>
-      <label className="block text-sm">
-        {countIsReceived ? `Units that were usable (booked ${contract.booked})` : `Units affected (booked ${contract.booked})`}
-        <input className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2" inputMode="numeric" value={count} onChange={(event) => setCount(event.target.value)} required />
-      </label>
+      {tracked && countIsReceived && (
+        <p className="text-sm">Usable units in the photos: {summary?.received.length ?? 0} of {contract.booked} booked.</p>
+      )}
+      {tracked && nature === "MISSING_ON_RETURN" && (
+        <p className="text-sm">Sent and not in the return photos: {summary?.missingOnReturn.length ?? 0}.</p>
+      )}
+      {needsMarkedDamage && (
+        <p className="text-sm">{damageCount ? `${damageCount} units marked damaged.` : "Tick the damaged units and add a photo of the damage before opening this dispute."}</p>
+      )}
+      {!tracked && (
+        <label className="block text-sm">
+          {countIsReceived ? `Units that were usable (booked ${contract.booked})` : `Units affected (booked ${contract.booked})`}
+          <input className="mt-1 w-full rounded-md border border-border bg-card px-3 py-2" inputMode="numeric" value={count} onChange={(event) => setCount(event.target.value)} required />
+        </label>
+      )}
       {showSeverity && (
         <label className="block text-sm">
           How bad
@@ -80,7 +102,7 @@ function DisputeForm({ contract }: { contract: HandoverContract }) {
           </select>
         </label>
       )}
-      <Button type="submit" disabled={open.isPending}>
+      <Button type="submit" disabled={open.isPending || (needsMarkedDamage && damageCount === 0)}>
         Open dispute
       </Button>
     </form>
@@ -90,6 +112,7 @@ function DisputeForm({ contract }: { contract: HandoverContract }) {
 export default function HandoverPage() {
   const { id } = useParams();
   const { data, isPending, isError, refetch } = useContract(id);
+  const units = useContractUnits(id);
   const scan = useRecordArrival();
   const approve = useApproveHandover();
   const agree = useAgreeDispute();
@@ -150,7 +173,7 @@ export default function HandoverPage() {
       <section className="surface space-y-4 p-5">
         {data.phase === "DISPATCH" && (
           <p className="text-sm">
-            {data.provider.name} signs the printed contract when sending the order. No dispute is raised at this step.
+            {data.provider.name} signs the printed contract and photographs the labels on the units leaving. No dispute is raised at this step.
           </p>
         )}
         {data.phase === "RECEIPT" && data.viewerRole === "SEEKER" && (
@@ -172,6 +195,16 @@ export default function HandoverPage() {
         )}
         {data.phase === "RETURN" && data.viewerRole === "SEEKER" && <p className="text-sm">{data.provider.name} checks the goods on return and can raise a dispute.</p>}
         {data.phase === "CLOSED" && <p className="text-sm">Both sides have finished this handover.</p>}
+
+        {data.viewerRole === "PROVIDER" && !data.seekerApprovedAt && data.phase !== "RETURN" && data.phase !== "CLOSED" && !(units.data?.received.length) && (
+          <UnitScan contractId={data.id} phase="DISPATCH" booked={data.booked} />
+        )}
+        {data.viewerRole === "SEEKER" && data.phase === "RECEIPT" && !data.seekerApprovedAt && (!data.arrivedAt || data.windowOpen) && (
+          <UnitScan contractId={data.id} phase="RECEIPT" booked={data.booked} />
+        )}
+        {data.viewerRole === "PROVIDER" && data.phase === "RETURN" && !data.providerApprovedAt && (
+          <UnitScan contractId={data.id} phase="RETURN" booked={data.booked} />
+        )}
 
         {data.disputes.map((dispute) => (
           <div key={dispute.id} className="space-y-1 border-t border-border pt-3 text-sm">
