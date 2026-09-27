@@ -16,6 +16,12 @@ import "./index.css";
 
 import { router } from "./router";
 import { AppToaster } from "./components/shell/AppToaster";
+// Imported early so the install prompt is caught even before the nav mounts.
+import "./hooks/useInstallApp";
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => void navigator.serviceWorker.register("/sw.js").catch(() => undefined));
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {

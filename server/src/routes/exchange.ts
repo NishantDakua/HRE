@@ -433,8 +433,6 @@ router.post('/matches', async (req, res) => {
       category: requirement.category,
       available: { gt: 0 },
       status: 'ACTIVE',
-      // Never offer someone their own listings.
-      ...(actor ? { businessId: { not: actor.id } } : {}),
     },
     include: listingInclude,
   });
@@ -469,12 +467,14 @@ router.post('/matches', async (req, res) => {
       total: weightedTotal(score, Boolean(requirement.urgent)),
     };
   });
-  const budget = requirement.budget === undefined ? undefined : Number(requirement.budget);
-  res.json(
-    results
-      .filter((match) => budget === undefined || Number.isNaN(budget) || match.landed <= budget * 1.25)
-      .sort((a, b) => b.total - a.total)
-  );
+  // Budget never hides a match: over-budget ones are flagged (by how much) and ranked after
+  // everything that fits, so nothing useful disappears from the seeker's list.
+  const budget = requirement.budget === undefined || requirement.budget === null ? NaN : Number(requirement.budget);
+  const flagged = results.map((match) => ({
+    ...match,
+    overBudgetBy: Number.isFinite(budget) && match.landed > budget ? Math.round(match.landed - budget) : 0,
+  }));
+  res.json(flagged.sort((a, b) => Number(a.overBudgetBy > 0) - Number(b.overBudgetBy > 0) || b.total - a.total));
 });
 
 router.post('/requests/parse', (req, res) => {

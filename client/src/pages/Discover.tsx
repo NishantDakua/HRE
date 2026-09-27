@@ -82,6 +82,7 @@ export default function DiscoverPage() {
         delivery: m.delivery,
         landed: m.landed,
         fulfils: m.fulfils,
+        overBudgetBy: m.overBudgetBy,
       }));
     }
     return (listings.data ?? [])
@@ -90,7 +91,12 @@ export default function DiscoverPage() {
   }, [requirement, matches.data, listings.data, origin]);
 
   const visible = useMemo(() => applyFilters(rows, filters), [rows, filters]);
-  const bundle = useMemo(() => (requirement ? planBundle(visible, requirement.quantity) : null), [visible, requirement]);
+  const withinBudget = visible.filter((row) => !row.overBudgetBy).length;
+  // Your own listings show in results but are never booked from yourself.
+  const bundle = useMemo(
+    () => (requirement ? planBundle(visible.filter((row) => row.resource.businessId !== business?.id), requirement.quantity) : null),
+    [visible, requirement, business?.id]
+  );
   const counts = useMemo(() => {
     const out: Partial<Record<ResourceCategory, number>> = {};
     for (const r of listings.data ?? []) out[r.category] = (out[r.category] ?? 0) + 1;
@@ -313,6 +319,12 @@ export default function DiscoverPage() {
                     {formatINR(requirement.quantity)} × {CATEGORY_LABEL[requirement.category].toLowerCase()}
                   </span>{" "}
                   · ranked by match score
+                  {requirement.budget !== undefined && withinBudget < visible.length && (
+                    <>
+                      {" "}
+                      · <span className="text-text">{withinBudget}</span> within budget, {visible.length - withinBudget} over (shown last)
+                    </>
+                  )}
                 </>
               ) : (
                 <>

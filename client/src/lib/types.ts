@@ -274,6 +274,8 @@ export interface MatchResult {
   fulfils: number;
   score: MatchScore;
   total: number; // 0–100
+  /** How far `landed` exceeds the requirement's budget (0 when within it or no budget). Ranked last. */
+  overBudgetBy?: number;
 }
 
 export interface ParsedRequest {

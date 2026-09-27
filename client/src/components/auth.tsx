@@ -2,9 +2,11 @@ import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { Navigate, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ClerkProvider, SignInButton, SignedIn, SignedOut, UserButton, useAuth } from "@clerk/clerk-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { Download } from "lucide-react";
 import { setAuthTokenGetter, setOnboardingRequiredHandler, setUnauthenticatedHandler } from "@/lib/api";
 import { AUTH_ENABLED, PUBLISHABLE_KEY } from "@/lib/clerk";
 import { meKey, useAccount } from "@/hooks/account";
+import { useInstallApp } from "@/hooks/useInstallApp";
 import { DevErrorDetail } from "@/components/DevErrorDetail";
 import { Button } from "@/components/ui/button";
 
@@ -109,16 +111,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function NavAuth() {
+  const app = useInstallApp();
   if (!AUTH_ENABLED) return null;
   return (
     <>
       <SignedOut>
+        {app.available && (
+          <Button size="sm" variant="ghost" onClick={app.install} aria-label="Download app" className="max-sm:w-8 max-sm:px-0">
+            <Download />
+            <span className="hidden sm:inline">Download</span>
+          </Button>
+        )}
         <SignInButton mode="modal">
           <Button size="sm">Sign in</Button>
         </SignInButton>
       </SignedOut>
       <SignedIn>
-        <UserButton appearance={{ elements: { avatarBox: "size-9" } }} />
+        <UserButton appearance={{ elements: { avatarBox: "size-9" } }}>
+          {app.available && (
+            <UserButton.MenuItems>
+              <UserButton.Action label="Download app" labelIcon={<Download className="size-4" />} onClick={app.install} />
+            </UserButton.MenuItems>
+          )}
+        </UserButton>
       </SignedIn>
     </>
   );

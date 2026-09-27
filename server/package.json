@@ -15,9 +15,12 @@
     "db:constraints": "prisma db execute --file prisma/constraints.sql --schema prisma/schema.prisma",
     "db:seed": "npm run prisma:seed",
     "db:backup": "tsx prisma/backup.ts",
-    "db:local": "tsx scripts/pglite-server.ts"
+    "db:local": "tsx scripts/pglite-server.ts",
+    "demo:users": "tsx scripts/create-demo-users.ts",
+    "demo:data": "tsx scripts/seed-demo-data.ts"
   },
   "dependencies": {
+    "@clerk/backend": "^3.20.1",
     "@clerk/express": "^1.2.0",
     "@prisma/client": "^5.0.0",
     "cors": "^2.8.5",

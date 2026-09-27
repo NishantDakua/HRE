@@ -2,6 +2,7 @@ import { Outlet, useMatch } from "react-router-dom";
 import { TopNav } from "@/components/shell/TopNav";
 import { ApiStatusDot } from "@/components/ApiStatusDot";
 import { BottomTabBar } from "@/components/shell/BottomTabBar";
+import { InstallHelpSheet } from "@/components/shell/InstallHelpSheet";
 
 /** Nav + page frame. The landing page is full-bleed with a transparent nav over the hero. */
 export function AppShell() {
@@ -21,6 +22,7 @@ export function AppShell() {
       </main>
       <BottomTabBar />
       <ApiStatusDot />
+      <InstallHelpSheet />
     </>
   );
 }

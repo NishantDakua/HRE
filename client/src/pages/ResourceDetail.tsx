@@ -14,6 +14,7 @@ import { CATEGORY_ICON } from "@/components/ResourceCard";
 import { StatusPill } from "@/components/StatusPill";
 import { Button } from "@/components/ui/button";
 import { useAvailability, useResource } from "@/hooks/queries";
+import { useAccount } from "@/hooks/account";
 import { useMediaQuery } from "@/hooks/useMediaQuery";
 import { prepareAvailability, type PreparedAvailability } from "@/lib/availability";
 import { CATEGORY_LABEL, type ResourceWithBusiness } from "@/lib/types";
@@ -53,6 +54,21 @@ function NotFound() {
 /* ------------------------------------------------------------------ */
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
+
+/** Shown instead of the request form on your own listing. */
+function OwnListingNote() {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div>
+        <p className="eyebrow text-primary">Your listing</p>
+        <p className="mt-1 text-sm text-muted">This is how seekers see it.</p>
+      </div>
+      <Button asChild size="lg" variant="outline">
+        <Link to="/dashboard">Manage in dashboard</Link>
+      </Button>
+    </div>
+  );
+}
 
 export default function ResourceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -103,6 +119,7 @@ function ResourceDetailView({
   }, [prepared, trigger, getValues]);
 
   const desktop = useMediaQuery("(min-width: 1024px)");
+  const mine = useAccount().business?.id === r.businessId;
   const [sheetOpen, setSheetOpen] = useState(false);
   const values = form.watch();
   const total = quote(r, values).total;
@@ -164,15 +181,21 @@ function ResourceDetailView({
           {desktop && (
             <aside className="lg:sticky lg:top-24 lg:self-start">
               <div className="surface max-h-[calc(100vh-7rem)] overflow-y-auto p-6" data-lenis-prevent>
-                <RequestSheet resource={r} prepared={prepared} />
+                {mine ? <OwnListingNote /> : <RequestSheet resource={r} prepared={prepared} />}
               </div>
             </aside>
           )}
         </div>
       </div>
 
+      {!desktop && mine && (
+        <div className="fixed inset-x-0 bottom-above-tabbar z-30 border-t border-border bg-card/95 px-4 py-3 backdrop-blur-md md:bottom-0">
+          <OwnListingNote />
+        </div>
+      )}
+
       {/* Mobile: sticky price bar + bottom sheet (same form instance). */}
-      {!desktop && (
+      {!desktop && !mine && (
         <>
           <div className="fixed inset-x-0 bottom-above-tabbar z-30 border-t border-border bg-card/95 px-4 py-3 backdrop-blur-md md:bottom-0">
             <div className="flex items-center justify-between gap-3">

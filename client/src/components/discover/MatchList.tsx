@@ -46,7 +46,12 @@ function LandedCost({ row, needed }: { row: Row; needed?: number }) {
           </span>
         )}
       </div>
-      <div className="mt-2 flex justify-end">
+      <div className={cn("mt-2 flex items-center gap-3", row.overBudgetBy ? "justify-between" : "justify-end")}>
+        {!!row.overBudgetBy && (
+          <span className="rounded-full bg-conflict/10 px-1.5 py-0.5 font-mono text-[11px] tabular-nums text-conflict">
+            ₹{formatINR(row.overBudgetBy)} over budget
+          </span>
+        )}
         <DetailsLink id={r.id} />
       </div>
     </div>

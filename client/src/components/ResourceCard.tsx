@@ -20,6 +20,7 @@ import { CATEGORY_LABEL, type GeoPoint, type MatchScore, type ResourceCategory, 
 import { PriceTag } from "./PriceTag";
 import { StatusPill } from "./StatusPill";
 import { MatchScoreBar } from "./MatchScoreBar";
+import { useAccount } from "@/hooks/account";
 
 export const CATEGORY_ICON: Record<ResourceCategory, LucideIcon> = {
   BANQUET_SPACE: Building2,
@@ -80,6 +81,8 @@ export function ResourceCard({
   const biz = resource.business;
   const Icon = CATEGORY_ICON[resource.category];
   const km = kmOverride ?? (origin && biz ? distanceKm(origin, biz) : undefined);
+  // Your own listings still rank in results; they're labelled so you don't try to book them.
+  const mine = useAccount().business?.id === resource.businessId;
 
   const body = (
     <motion.article
@@ -102,7 +105,11 @@ export function ResourceCard({
           <span className="truncate text-xs">{CATEGORY_LABEL[resource.category]}</span>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <StatusPill status={availability(resource)} />
+          {mine ? (
+            <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-medium text-primary">Your listing</span>
+          ) : (
+            <StatusPill status={availability(resource)} />
+          )}
           {actions}
         </div>
       </div>

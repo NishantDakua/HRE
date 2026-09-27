@@ -18,7 +18,9 @@
     "db:seed": "pnpm --filter hre-server prisma:seed",
     "db:migrate": "pnpm --filter hre-server prisma:migrate",
     "db:constraints": "pnpm --filter hre-server db:constraints",
-    "db:backup": "pnpm --filter hre-server db:backup"
+    "db:backup": "pnpm --filter hre-server db:backup",
+    "demo:users": "pnpm --filter hre-server demo:users",
+    "demo:data": "pnpm --filter hre-server demo:data"
   },
   "pnpm": {
     "overrides": {

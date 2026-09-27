@@ -5,6 +5,7 @@ import type { ExchangeBusiness } from '@prisma/client';
 import { prisma } from '../exchange/db.js';
 import { clerkProfile, roleFor, sessionUserId, type SpareRole } from '../exchange/actor.js';
 import { AREAS, AREA_CENTER, businessJson } from './exchange.js';
+import { createDemoPack, isDemoEmail } from '../exchange/demoPack.js';
 
 /**
  * The signed-in account.
@@ -111,7 +112,18 @@ router.post(
       return created;
     });
 
-    res.status(201).json(await mePayload(userId, business));
+    // DEMO_EMAILS accounts get a ready-made history for their role (once per business).
+    let created = business;
+    if (isDemoEmail(profile.email)) {
+      try {
+        await createDemoPack(business, input.role);
+        created = (await prisma.exchangeBusiness.findUnique({ where: { id: business.id } })) ?? business;
+      } catch (error) {
+        console.error('Demo pack failed:', error instanceof Error ? error.message : error);
+      }
+    }
+
+    res.status(201).json(await mePayload(userId, created));
   })
 );
 

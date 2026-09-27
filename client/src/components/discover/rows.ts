@@ -11,6 +11,7 @@ export interface Row {
   delivery?: number;
   landed?: number;
   fulfils?: number;
+  overBudgetBy?: number;
 }
 
 export function applyFilters(rows: Row[], f: FilterValues): Row[] {
