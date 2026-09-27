@@ -1,7 +1,7 @@
-import { Suspense, lazy, useCallback, useMemo, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { AnimatePresence, motion } from "framer-motion";
-import { Map as MapIcon, SearchX, SlidersHorizontal, Zap } from "lucide-react";
+import { List, Map as MapIcon, SearchX, SlidersHorizontal, X, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { BundleBanner } from "@/components/discover/BundleBanner";
 import { CompareDock, MAX_COMPARE } from "@/components/discover/CompareDrawer";
@@ -41,6 +41,7 @@ export default function DiscoverPage() {
   const search = params.toString();
   const lenis = useLenis();
   const wide = useMediaQuery("(min-width: 1280px)");
+  const compact = !useMediaQuery("(min-width: 1024px)");
 
   // URL → state
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -127,15 +128,53 @@ export default function DiscoverPage() {
     });
 
   const scrollToCard = (id: string) => {
-    const el = document.getElementById(`match-${id}`);
-    if (!el) return;
-    if (lenis) lenis.scrollTo(el, { offset: -120, duration: 1 });
-    else el.scrollIntoView({ behavior: "smooth", block: "center" });
+    const go = () => {
+      const el = document.getElementById(`match-${id}`);
+      if (!el) return;
+      if (lenis) lenis.scrollTo(el, { offset: -120, duration: 1 });
+      else el.scrollIntoView({ behavior: "smooth", block: "center" });
+    };
+    if (compact && showMap) {
+      setShowMap(false);
+      window.setTimeout(go, 60);
+    } else go();
   };
+
+  useEffect(() => {
+    if (!compact) setShowFilters(false);
+  }, [compact]);
+  useEffect(() => {
+    if (!showFilters || !compact) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setShowFilters(false);
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [showFilters, compact]);
 
   const compareRows = compareIds.map((id) => rows.find((r) => r.resource.id === id)).filter((r): r is Row => !!r);
   const activeFilters = countActiveFilters(filters);
   const unitLabel = visible[0]?.resource.unitLabel ?? "units";
+
+  const filterRail = (
+    <FilterRail
+      values={filters}
+      category={draft.category}
+      counts={counts}
+      onChange={(v: FilterValues) => update((q) => writeFilters(q, v), true)}
+      onCategory={(c) =>
+        update((q) => {
+          const n = new URLSearchParams(q);
+          if (c) n.set("category", c);
+          else n.delete("category");
+          return n;
+        })
+      }
+    />
+  );
 
   const map = (
     <Suspense fallback={<MapFallback />}>
@@ -147,7 +186,7 @@ export default function DiscoverPage() {
     <div className="space-y-6">
       <header>
         <p className="eyebrow">Discover</p>
-        <h1 className="mt-2 text-4xl leading-[1.05] tracking-tightest md:text-5xl">
+        <h1 className="mt-2 text-[clamp(1.75rem,0.9rem+4vw,2.25rem)] leading-[1.05] tracking-tightest [overflow-wrap:anywhere] md:text-5xl">
           Find it <em>nearby.</em>
         </h1>
       </header>
@@ -169,31 +208,86 @@ export default function DiscoverPage() {
 
       <RequirementChips values={draft} onSubmit={(v) => update((q) => writeRequirement(q, v))} />
 
-      <div className="flex gap-2 lg:hidden">
-        <Button variant="outline" size="sm" aria-expanded={showFilters} onClick={() => setShowFilters((s) => !s)}>
+      <div className="flex items-center justify-between gap-2 lg:hidden">
+        <Button variant="outline" size="sm" aria-expanded={showFilters} aria-haspopup="dialog" onClick={() => setShowFilters(true)}>
           <SlidersHorizontal />
           Filters{activeFilters > 0 && ` (${activeFilters})`}
         </Button>
+        <div role="radiogroup" aria-label="Results view" className="flex rounded-full border border-border bg-card p-0.5">
+          {(
+            [
+              [false, "List", List],
+              [true, "Map", MapIcon],
+            ] as const
+          ).map(([isMap, label, Icon]) => (
+            <button
+              key={label}
+              type="button"
+              role="radio"
+              aria-checked={showMap === isMap}
+              onClick={() => setShowMap(isMap)}
+              className={cn(
+                "inline-flex h-8 items-center gap-1.5 rounded-full px-3 text-xs transition-colors",
+                showMap === isMap ? "bg-ink text-paper" : "text-muted hover:text-text"
+              )}
+            >
+              <Icon className="size-3.5" /> {label}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,0.8fr)]">
-        <aside className={cn("lg:block", showFilters ? "block" : "hidden")}>
-          <div className="surface p-4 lg:sticky lg:top-24 lg:border-0 lg:bg-transparent lg:p-0 lg:shadow-none">
-            <FilterRail
-              values={filters}
-              category={draft.category}
-              counts={counts}
-              onChange={(v: FilterValues) => update((q) => writeFilters(q, v), true)}
-              onCategory={(c) =>
-                update((q) => {
-                  const n = new URLSearchParams(q);
-                  if (c) n.set("category", c);
-                  else n.delete("category");
-                  return n;
-                })
-              }
+      <AnimatePresence>
+        {compact && showFilters && (
+          <>
+            <motion.div
+              key="filters-backdrop"
+              className="fixed inset-0 z-[60] bg-ink/40"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setShowFilters(false)}
             />
-          </div>
+            <motion.div
+              key="filters-sheet"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="filters-sheet-title"
+              className="fixed inset-x-0 bottom-0 z-[60] flex max-h-[100dvh] flex-col bg-card shadow-card-hover sm:max-h-[85vh] sm:rounded-t-[22px]"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 32, stiffness: 320 }}
+            >
+              <div className="flex items-center justify-between border-b border-border px-4 py-2">
+                <h2 id="filters-sheet-title" className="font-sans text-base font-medium tracking-normal text-text">
+                  Filters
+                </h2>
+                <button type="button" aria-label="Close filters" onClick={() => setShowFilters(false)} className="grid size-11 place-items-center rounded-full text-muted hover:text-text">
+                  <X className="size-5" />
+                </button>
+              </div>
+              <div className="flex-1 overflow-y-auto overscroll-contain px-4 py-4" data-lenis-prevent>
+                {filterRail}
+              </div>
+              <div className="flex gap-2 border-t border-border bg-card px-4 pb-[calc(env(safe-area-inset-bottom)+0.75rem)] pt-3">
+                {activeFilters > 0 && (
+                  <Button variant="outline" className="flex-1" onClick={() => update((q) => writeFilters(q, DEFAULT_FILTERS), true)}>
+                    Reset
+                  </Button>
+                )}
+                <Button className="flex-[2]" onClick={() => setShowFilters(false)}>
+                  Show {visible.length} {visible.length === 1 ? "result" : "results"}
+                </Button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      <div className="grid gap-8 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[220px_minmax(0,1fr)_minmax(0,0.8fr)]">
+        <aside className="hidden lg:block">
+          <div className="lg:sticky lg:top-24">{!compact && filterRail}</div>
         </aside>
 
         <section className="min-w-0 space-y-5" aria-live="polite" aria-busy={loading || refreshing}>
@@ -222,7 +316,7 @@ export default function DiscoverPage() {
                   <Zap className="size-3" /> Urgent weighting
                 </span>
               )}
-              {!wide && (
+              {!wide && !compact && (
                 <Button variant="outline" size="sm" aria-expanded={showMap} onClick={() => setShowMap((s) => !s)}>
                   <MapIcon />
                   {showMap ? "Hide map" : "Map"}
@@ -232,7 +326,7 @@ export default function DiscoverPage() {
           </div>
 
           <AnimatePresence initial={false}>
-            {!wide && showMap && (
+            {!wide && !compact && showMap && (
               <motion.div
                 key="inline-map"
                 initial={{ height: 0, opacity: 0 }}
@@ -245,6 +339,9 @@ export default function DiscoverPage() {
             )}
           </AnimatePresence>
 
+          {compact && showMap && <div className="h-[calc(100dvh-13rem)] min-h-[320px] overflow-hidden rounded-lg md:h-[560px]">{map}</div>}
+
+          <div className={cn("space-y-5", compact && showMap && "hidden")}>
           <AnimatePresence>
             {bundle && requirement && (
               <BundleBanner
@@ -310,6 +407,7 @@ export default function DiscoverPage() {
               onToggleCompare={toggleCompare}
             />
           )}
+          </div>
         </section>
 
         {wide && (

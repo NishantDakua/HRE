@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState, type TouchEvent } from "react";
 import { useFormContext } from "react-hook-form";
 import {
   addDays,
@@ -26,6 +26,7 @@ import { dayRemaining, remainingDuring, toneFor, type PreparedAvailability, type
 import { isLocal, parseLocal, toLocal } from "@/lib/datetime";
 import type { ResourceWithBusiness } from "@/lib/types";
 import { cn } from "@/lib/utils";
+import { useMediaQuery } from "@/hooks/useMediaQuery";
 import type { RequestValues } from "./requestForm";
 
 const HOURS = Array.from({ length: 18 }, (_, i) => i + 6); // 06:00 – 23:00
@@ -43,7 +44,12 @@ const TONE_TEXT: Record<SlotTone, string> = {
   booked: "text-conflict",
 };
 
-type View = "week" | "month";
+type DeskView = "week" | "month";
+type PhoneView = "day" | "3day";
+type View = DeskView | PhoneView;
+
+const VIEW_LABEL: Record<View, string> = { day: "Day", "3day": "3 days", week: "Week", month: "Month" };
+const SPAN: Record<Exclude<View, "month">, number> = { day: 1, "3day": 3, week: 7 };
 
 interface AvailabilityCalendarProps {
   resource: ResourceWithBusiness;
@@ -61,8 +67,14 @@ export function AvailabilityCalendar({ resource, prepared, loading, error }: Ava
 
   const today = startOfDay(new Date());
   const horizon = prepared ? new Date(prepared.to) : addDays(today, 60);
-  const [view, setView] = useState<View>("week");
+  const phone = useMediaQuery("(max-width: 767px)");
+  const [deskView, setDeskView] = useState<DeskView>("week");
+  const [phoneView, setPhoneView] = useState<PhoneView>("3day");
+  const view: View = phone ? phoneView : deskView;
+  const views: View[] = phone ? ["day", "3day"] : ["week", "month"];
+  const setView = (v: View) => (v === "day" || v === "3day" ? setPhoneView(v) : setDeskView(v));
   const [weekStart, setWeekStart] = useState(() => startOfWeek(selStart ?? today, WEEK));
+  const [dayStart, setDayStart] = useState(() => (selStart && isAfter(selStart, today) ? startOfDay(selStart) : today));
   const [monthStart, setMonthStart] = useState(() => startOfMonth(selStart ?? today));
 
   const durationMins =
@@ -86,21 +98,55 @@ export function AvailabilityCalendar({ resource, prepared, loading, error }: Ava
     const s = set(day, { hours: selStart?.getHours() ?? 18, minutes: selStart?.getMinutes() ?? 0, seconds: 0, milliseconds: 0 });
     setWindow(s, new Date(s.getTime() + durationMins * 60_000));
     setWeekStart(startOfWeek(day, WEEK));
-    setView("week");
+    setDayStart(startOfDay(day));
+    setDeskView("week");
   };
 
-  const weekDays = useMemo(() => eachDayOfInterval({ start: weekStart, end: addDays(weekStart, 6) }), [weekStart]);
+  const span = view === "month" ? 7 : SPAN[view];
+  const gridStart = view === "week" ? weekStart : dayStart;
+  const weekDays = useMemo(() => eachDayOfInterval({ start: gridStart, end: addDays(gridStart, span - 1) }), [gridStart, span]);
   const monthDays = useMemo(
     () => eachDayOfInterval({ start: startOfWeek(monthStart, WEEK), end: endOfWeek(endOfMonth(monthStart), WEEK) }),
     [monthStart]
   );
 
-  const canPrev = view === "week" ? isAfter(weekStart, today) : isAfter(monthStart, startOfMonth(today));
-  const canNext = view === "week" ? isBefore(addWeeks(weekStart, 1), horizon) : isBefore(addMonths(monthStart, 1), horizon);
+  const canPrev = view === "month" ? isAfter(monthStart, startOfMonth(today)) : isAfter(gridStart, today);
+  const canNext =
+    view === "month"
+      ? isBefore(addMonths(monthStart, 1), horizon)
+      : view === "week"
+        ? isBefore(addWeeks(weekStart, 1), horizon)
+        : isBefore(addDays(dayStart, span), horizon);
+  const step = (dir: 1 | -1) => {
+    if (dir === -1 ? !canPrev : !canNext) return;
+    if (view === "month") setMonthStart((m) => addMonths(m, dir));
+    else if (view === "week") setWeekStart((w) => addWeeks(w, dir));
+    else setDayStart((d) => {
+      const next = addDays(d, dir * span);
+      return isBefore(next, today) ? today : next;
+    });
+  };
+  const unit = view === "month" ? "month" : view === "week" ? "week" : span === 1 ? "day" : `${span} days`;
+  const gridEnd = addDays(gridStart, span - 1);
   const title =
-    view === "week"
-      ? `${format(weekStart, "d MMM")} – ${format(addDays(weekStart, 6), isSameMonth(weekStart, addDays(weekStart, 6)) ? "d" : "d MMM")}`
-      : format(monthStart, "MMMM yyyy");
+    view === "month"
+      ? format(monthStart, "MMMM yyyy")
+      : span === 1
+        ? format(gridStart, "EEE d MMM")
+        : `${format(gridStart, "d MMM")} – ${format(gridEnd, isSameMonth(gridStart, gridEnd) ? "d" : "d MMM")}`;
+
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  const onTouchStart = (e: TouchEvent) => {
+    swipe.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+  };
+  const onTouchEnd = (e: TouchEvent) => {
+    const from = swipe.current;
+    swipe.current = null;
+    if (!from) return;
+    const dx = e.changedTouches[0].clientX - from.x;
+    const dy = e.changedTouches[0].clientY - from.y;
+    if (Math.abs(dx) > 50 && Math.abs(dx) > Math.abs(dy) * 1.5) step(dx < 0 ? 1 : -1);
+  };
 
   return (
     <section className="space-y-4" aria-labelledby="calendar-title">
@@ -110,7 +156,7 @@ export function AvailabilityCalendar({ resource, prepared, loading, error }: Ava
             Availability
           </h2>
           <div role="tablist" aria-label="Calendar view" className="flex rounded-full border border-border bg-card p-0.5">
-            {(["week", "month"] as const).map((v) => (
+            {views.map((v) => (
               <button
                 key={v}
                 type="button"
@@ -118,11 +164,11 @@ export function AvailabilityCalendar({ resource, prepared, loading, error }: Ava
                 aria-selected={view === v}
                 onClick={() => setView(v)}
                 className={cn(
-                  "h-7 rounded-full px-3 text-xs capitalize transition-colors",
+                  "h-7 rounded-full px-3 text-xs transition-colors",
                   view === v ? "bg-ink text-paper" : "text-muted hover:text-text"
                 )}
               >
-                {v}
+                {VIEW_LABEL[v]}
               </button>
             ))}
           </div>
@@ -130,20 +176,20 @@ export function AvailabilityCalendar({ resource, prepared, loading, error }: Ava
         <div className="flex items-center gap-1">
           <button
             type="button"
-            aria-label={view === "week" ? "Previous week" : "Previous month"}
+            aria-label={`Previous ${unit}`}
             disabled={!canPrev}
-            onClick={() => (view === "week" ? setWeekStart((w) => addWeeks(w, -1)) : setMonthStart((m) => addMonths(m, -1)))}
-            className="grid size-8 place-items-center rounded-full border border-border text-muted transition-colors hover:text-text disabled:opacity-30"
+            onClick={() => step(-1)}
+            className="grid size-8 touch:size-11 place-items-center rounded-full border border-border text-muted transition-colors hover:text-text disabled:opacity-30"
           >
             <ChevronLeft className="size-4" />
           </button>
-          <span className="min-w-[8.5rem] text-center font-mono text-xs tabular-nums text-text">{title}</span>
+          <span className="min-w-[7.5rem] text-center font-mono text-xs tabular-nums text-text sm:min-w-[8.5rem]">{title}</span>
           <button
             type="button"
-            aria-label={view === "week" ? "Next week" : "Next month"}
+            aria-label={`Next ${unit}`}
             disabled={!canNext}
-            onClick={() => (view === "week" ? setWeekStart((w) => addWeeks(w, 1)) : setMonthStart((m) => addMonths(m, 1)))}
-            className="grid size-8 place-items-center rounded-full border border-border text-muted transition-colors hover:text-text disabled:opacity-30"
+            onClick={() => step(1)}
+            className="grid size-8 touch:size-11 place-items-center rounded-full border border-border text-muted transition-colors hover:text-text disabled:opacity-30"
           >
             <ChevronRight className="size-4" />
           </button>
@@ -159,15 +205,20 @@ export function AvailabilityCalendar({ resource, prepared, loading, error }: Ava
       ) : (
         <AnimatePresence mode="wait" initial={false}>
           <motion.div
-            key={view + (view === "week" ? weekStart.toISOString() : monthStart.toISOString())}
+            key={view + (view === "month" ? monthStart : gridStart).toISOString()}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -6 }}
             transition={{ duration: 0.18 }}
           >
-            {view === "week" ? (
-              <div className="overflow-x-auto rounded-lg border border-border bg-card p-2" data-lenis-prevent>
-                <div className="grid min-w-[560px] grid-cols-[44px_repeat(7,minmax(0,1fr))] gap-px" role="grid" aria-label="Week availability by hour">
+            {view !== "month" ? (
+              <div className="overflow-x-auto rounded-lg border border-border bg-card p-2" data-lenis-prevent onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+                <div
+                  className={cn("grid gap-px", view === "week" && "min-w-[560px]")}
+                  style={{ gridTemplateColumns: `44px repeat(${span}, minmax(0, 1fr))` }}
+                  role="grid"
+                  aria-label={`${VIEW_LABEL[view]} availability by hour`}
+                >
                   <div />
                   {weekDays.map((d) => (
                     <div key={d.toISOString()} role="columnheader" className={cn("pb-1.5 text-center", isSameDay(d, today) && "text-primary")}>
@@ -177,7 +228,7 @@ export function AvailabilityCalendar({ resource, prepared, loading, error }: Ava
                   ))}
                   {HOURS.map((h) => (
                     <div key={h} role="row" className="contents">
-                      <div className="pr-1.5 text-right font-mono text-[10px] leading-7 tabular-nums text-muted">{String(h).padStart(2, "0")}:00</div>
+                      <div className="pr-1.5 text-right font-mono text-[10px] tabular-nums leading-7 text-muted touch:leading-[2.75rem]">{String(h).padStart(2, "0")}:00</div>
                       {weekDays.map((d) => {
                         const cellStart = set(d, { hours: h, minutes: 0, seconds: 0, milliseconds: 0 });
                         const cellEnd = addHours(cellStart, 1);
@@ -198,7 +249,7 @@ export function AvailabilityCalendar({ resource, prepared, loading, error }: Ava
                             title={`${format(cellStart, "HH:mm")} · ${remaining}/${prepared.quantity} free · shift-click to extend`}
                             onClick={(e) => pickHour(cellStart, e.shiftKey)}
                             className={cn(
-                              "relative h-7 rounded-[4px] font-mono text-[10px] tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-35",
+                              "relative h-7 rounded-[4px] font-mono text-[10px] tabular-nums transition-colors disabled:cursor-not-allowed disabled:opacity-35 touch:h-11 touch:text-xs",
                               TONE_CELL[tone],
                               TONE_TEXT[tone],
                               selected && "z-10 outline outline-2 -outline-offset-1",
@@ -271,7 +322,7 @@ export function AvailabilityCalendar({ resource, prepared, loading, error }: Ava
         <li className="inline-flex items-center gap-1.5">
           <span className="size-3 rounded-sm bg-primary/35 outline outline-2 -outline-offset-1 outline-primary" /> Your request
         </li>
-        {view === "week" && <li className="text-muted/80">Click to start · shift-click to extend</li>}
+        {view !== "month" && <li className="text-muted/80">{phone ? "Tap an hour to start · swipe for more days" : "Click to start · shift-click to extend"}</li>}
       </ul>
     </section>
   );

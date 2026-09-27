@@ -120,7 +120,7 @@ export function SiteFooter() {
             <FooterColumn title="Product">
               {PRODUCT.map((l) => (
                 <li key={l.label}>
-                  <Link to={l.href} className="transition-colors hover:text-text">
+                  <Link to={l.href} className="inline-flex items-center transition-colors hover:text-text touch:min-h-[44px]">
                     {l.label}
                   </Link>
                 </li>
@@ -132,7 +132,7 @@ export function SiteFooter() {
             <FooterColumn title="Categories">
               {RESOURCE_CATEGORIES.map((c) => (
                 <li key={c}>
-                  <Link to={`/discover?category=${c}`} className="transition-colors hover:text-text">
+                  <Link to={`/discover?category=${c}`} className="inline-flex items-center transition-colors hover:text-text touch:min-h-[44px]">
                     {CATEGORY_LABEL[c]}
                   </Link>
                 </li>

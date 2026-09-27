@@ -609,7 +609,7 @@ export function DayInMumbai() {
                     <AnimatePresence>
                       {copy.headline && (
                         <motion.div key={act} initial="hidden" animate="show" exit="exit" className="col-start-1 row-start-1 self-end">
-                          <h2 className="text-[2.4rem] leading-[1.02] tracking-tightest text-[color:rgb(var(--hero-fg))] md:text-6xl xl:text-7xl">
+                          <h2 className="text-[clamp(1.9rem,1rem+4.5vw,2.4rem)] leading-[1.02] tracking-tightest text-[color:rgb(var(--hero-fg))] md:text-6xl xl:text-7xl">
                             <SplitHeadline text={copy.headline} emphasis={copy.emphasis} />
                           </h2>
                           {copy.sub && (

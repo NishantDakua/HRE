@@ -83,6 +83,57 @@ export async function ensureContracts(prisma: PrismaClient, bookingId: string) {
   }
 }
 
+const OPEN_DEAL = new Set(['ACCEPTED', 'CONFIRMED', 'IN_USE', 'COMPLETED']);
+
+export interface BookingProgress {
+  status: 'CONFIRMED' | 'IN_USE' | 'COMPLETED';
+  confirmedAt: string | null;
+  dispatchedAt: string | null;
+  completedAt: string | null;
+}
+
+/** Accept locks the booking. Dispatch puts it in use. Approving the return completes it. */
+export async function syncBookingProgress(prisma: PrismaClient, bookingId: string): Promise<BookingProgress | null> {
+  const booking = await prisma.exchangeBooking.findUnique({ where: { id: bookingId } });
+  if (!booking || !OPEN_DEAL.has(booking.status)) return null;
+
+  await ensureContracts(prisma, bookingId);
+  const contracts = await prisma.exchangeContract.findMany({
+    where: { bookingId },
+    include: { signatures: true, disputes: true },
+  });
+  const confirmedAt = contracts.reduce<Date | null>((earliest, contract) => {
+    return !earliest || contract.createdAt < earliest ? contract.createdAt : earliest;
+  }, null);
+  const dispatchTimes = contracts.flatMap((contract) =>
+    contract.signatures.filter((signature) => signature.purpose === 'DISPATCH').map((signature) => signature.signedAt)
+  );
+  const dispatchedAt = dispatchTimes.sort((a, b) => a.getTime() - b.getTime())[0] ?? null;
+  const returnSettled = (contract: (typeof contracts)[number]) =>
+    Boolean(contract.providerApprovedAt) || contract.disputes.some((dispute) => dispute.phase === 'RETURN' && dispute.status === 'AGREED');
+  const allReturned = contracts.length > 0 && contracts.every(returnSettled);
+  const completedAt = allReturned
+    ? contracts
+        .map((contract) => contract.providerApprovedAt ?? contract.disputes.find((dispute) => dispute.phase === 'RETURN' && dispute.status === 'AGREED')?.createdAt ?? null)
+        .filter((time): time is Date => time !== null)
+        .sort((a, b) => b.getTime() - a.getTime())[0] ?? null
+    : null;
+  const status = allReturned ? 'COMPLETED' : dispatchTimes.length > 0 ? 'IN_USE' : 'CONFIRMED';
+  if (status !== booking.status) {
+    await prisma.exchangeBooking.update({ where: { id: bookingId }, data: { status } });
+  }
+  await prisma.exchangeOffer.updateMany({
+    where: { bookingId, status: 'OPEN' },
+    data: { status: 'ACCEPTED' },
+  });
+  return {
+    status,
+    confirmedAt: confirmedAt?.toISOString() ?? null,
+    dispatchedAt: dispatchedAt?.toISOString() ?? null,
+    completedAt: completedAt?.toISOString() ?? null,
+  };
+}
+
 async function saveScan(dataUrl: string, contractId: string, purpose: string) {
   const match = dataUrl.match(/^data:image\/jpeg;base64,([A-Za-z0-9+/=\s]+)$/);
   if (!match) throw new ContractError(400, 'Upload a photo or scan of the signed page.');

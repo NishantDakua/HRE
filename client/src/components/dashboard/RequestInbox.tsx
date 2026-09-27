@@ -146,9 +146,9 @@ function RequestRow({ booking: b }: { booking: BookingDetail }) {
           </span>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-              <span className="inline-flex items-center gap-1 text-sm font-medium text-text">
-                {b.seeker.name}
-                {b.seeker.verified && <BadgeCheck className="size-3.5 text-primary" aria-label="Verified" />}
+              <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-sm font-medium text-text">
+                <span className="truncate">{b.seeker.name}</span>
+                {b.seeker.verified && <BadgeCheck className="size-3.5 shrink-0 text-primary" aria-label="Verified" />}
               </span>
               {b.urgent ? (
                 <span className="inline-flex items-center gap-1 rounded-full bg-conflict px-2 py-0.5 font-mono text-[10px] font-medium uppercase tracking-[0.1em] text-card">

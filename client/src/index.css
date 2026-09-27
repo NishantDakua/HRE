@@ -199,3 +199,42 @@ html.lenis body {
     box-shadow: none;
   }
 }
+
+@layer base {
+  @media (pointer: coarse) {
+    :where(button, [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"], [role="option"], [role="menuitem"], summary, select, a[href]) {
+      min-height: 44px;
+    }
+    :where(button, [role="button"], [role="tab"], [role="radio"], [role="switch"], [role="checkbox"], [role="menuitem"]) {
+      min-width: 44px;
+    }
+    :where(input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="hidden"]), textarea) {
+      min-height: 44px;
+    }
+    input,
+    select,
+    textarea {
+      font-size: max(16px, 1em) !important;
+    }
+    .leaflet-touch .leaflet-bar a {
+      width: 44px;
+      height: 44px;
+      line-height: 44px;
+    }
+  }
+}
+
+@layer utilities {
+  .pb-tabbar {
+    padding-bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  }
+  .bottom-above-tabbar {
+    bottom: calc(4.25rem + env(safe-area-inset-bottom));
+  }
+  .bottom-tabbar {
+    bottom: calc(4.25rem + env(safe-area-inset-bottom) + 0.75rem);
+  }
+  .pb-safe {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}

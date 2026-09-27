@@ -18,6 +18,7 @@ const config: Config = {
       screens: { "2xl": "1360px" },
     },
     extend: {
+      opacity: { "15": "0.15", "35": "0.35", "45": "0.45", "55": "0.55", "65": "0.65", "85": "0.85" },
       colors: {
         // Core palette
         paper: token("paper"),
@@ -112,7 +113,13 @@ const config: Config = {
       },
     },
   },
-  plugins: [animate, sizeUtility],
+  plugins: [
+    animate,
+    sizeUtility,
+    plugin(({ addVariant }) => {
+      addVariant("touch", "@media (pointer: coarse)");
+    }),
+  ],
 };
 
 export default config;

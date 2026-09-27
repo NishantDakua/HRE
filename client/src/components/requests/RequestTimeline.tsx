@@ -26,35 +26,46 @@ const LABEL: Partial<Record<BookingStatus, string>> = {
 
 const fmt = (iso: string) => format(parseISO(iso), "EEE d MMM, h:mm a");
 
+function stepState(status: BookingStatus, index: number, at: number, confirmedIndex: number, terminal: boolean): State {
+  if (terminal) return index <= at ? "done" : "upcoming";
+  if (status === "CONFIRMED" && index <= confirmedIndex) return "done";
+  if (index < at || (index === at && status === "COMPLETED")) return "done";
+  if (index === at) return "current";
+  return "upcoming";
+}
+
 function buildSteps(b: BookingDetail): Step[] {
   const offers = b.offers.filter((o) => o.resourceId === b.lines[0]?.resourceId);
   const firstCounter = offers.find((o) => o.round > 1);
-  const accepted = offers.find((o) => o.status === "ACCEPTED");
   const terminal = b.status === "REJECTED" || b.status === "CANCELLED";
-  // Where the booking got to before a rejection/cancellation.
-  const reached = terminal ? (offers.length > 1 ? 1 : 0) : FLOW.indexOf(b.status);
+  const at = terminal ? (offers.length > 1 ? 1 : 0) : FLOW.indexOf(b.status);
+  const confirmedIndex = FLOW.indexOf("CONFIRMED");
 
   const times: Partial<Record<BookingStatus, { at?: string; hint?: string }>> = {
     PENDING: { at: b.createdAt },
     COUNTERED: firstCounter ? { at: firstCounter.createdAt, hint: `${offers.length} offers` } : { hint: "skipped — accepted as asked" },
-    ACCEPTED: accepted ? { at: accepted.createdAt } : {},
-    IN_USE: { at: b.startAt, hint: "handover" },
-    COMPLETED: { at: b.endAt, hint: "return" },
+    ACCEPTED: { at: b.confirmedAt },
+    CONFIRMED: { at: b.confirmedAt, hint: "inventory held" },
+    IN_USE: b.status === "IN_USE" || b.status === "COMPLETED"
+      ? { at: b.dispatchedAt ?? b.startAt, hint: "handover" }
+      : { at: b.startAt, hint: "handover" },
+    COMPLETED: b.status === "COMPLETED"
+      ? { at: b.completedAt ?? b.endAt, hint: "return" }
+      : { at: b.endAt, hint: "return" },
   };
 
   const steps: Step[] = FLOW.map((status, i) => ({
     key: status,
     label: LABEL[status] ?? status,
     ...times[status],
-    state: i < reached || (i === reached && status === "COMPLETED") ? "done" : i === reached && !terminal ? "current" : "upcoming",
+    state: stepState(b.status, i, at, confirmedIndex, terminal),
   }));
 
-  // Negotiation is optional: if we went straight past it, mark it done-but-skipped.
-  if (!firstCounter && reached > 1) steps[1].state = "done";
+  if (!firstCounter && at > 1) steps[1].state = "done";
 
   if (terminal) {
     return [
-      ...steps.slice(0, reached + 1).map((s) => ({ ...s, state: "done" as const })),
+      ...steps.slice(0, at + 1).map((s) => ({ ...s, state: "done" as const })),
       {
         key: b.status,
         label: b.status === "REJECTED" ? "Declined" : "Cancelled",

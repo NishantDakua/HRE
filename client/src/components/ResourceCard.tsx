@@ -111,9 +111,9 @@ export function ResourceCard({
         <h3 className="font-display text-xl leading-tight text-text">{resource.title}</h3>
         {biz && (
           <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-muted">
-            <span className="inline-flex items-center gap-1 text-text/80">
-              {biz.name}
-              {biz.verified && <BadgeCheck className="size-3.5 text-primary" strokeWidth={2} aria-label="Verified" />}
+            <span className="inline-flex min-w-0 max-w-full items-center gap-1 text-text/80">
+              <span className="truncate">{biz.name}</span>
+              {biz.verified && <BadgeCheck className="size-3.5 shrink-0 text-primary" strokeWidth={2} aria-label="Verified" />}
             </span>
             <span className="inline-flex items-center gap-1">
               <MapPin className="size-3" strokeWidth={1.75} />

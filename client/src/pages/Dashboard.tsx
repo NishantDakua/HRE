@@ -47,7 +47,7 @@ export default function DashboardPage() {
       <header className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <p className="eyebrow">Dashboard · {mode === "provider" ? "Provider" : "Seeker"}</p>
-          <h1 className="mt-2 text-4xl leading-[1.05] tracking-tightest md:text-5xl">
+          <h1 className="mt-2 text-[clamp(1.75rem,0.9rem+4vw,2.25rem)] leading-[1.05] tracking-tightest [overflow-wrap:anywhere] md:text-5xl">
             {greeting()}
             {name ? (
               <>

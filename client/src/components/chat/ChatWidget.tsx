@@ -305,7 +305,7 @@ export function ChatWidget() {
             aria-label="Open booking assistant"
             className={cn(
               "fixed right-4 z-50 grid size-14 place-items-center rounded-full bg-ink text-paper shadow-card-hover transition-transform hover:scale-105 sm:right-6",
-              onResourcePage ? "bottom-24 lg:bottom-6" : "bottom-5 sm:bottom-6"
+              onResourcePage ? "bottom-[calc(8.75rem+env(safe-area-inset-bottom))] md:bottom-6" : "bottom-tabbar md:bottom-6"
             )}
           >
             <MessageCircle className="size-6" strokeWidth={1.75} />

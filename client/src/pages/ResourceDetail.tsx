@@ -131,7 +131,7 @@ function ResourceDetailView({
                 </span>
                 <StatusPill status={stock} />
               </div>
-              <h1 className="text-4xl leading-[1.05] tracking-tightest md:text-5xl">{r.title}</h1>
+              <h1 className="text-[clamp(1.75rem,0.9rem+4vw,2.25rem)] leading-[1.05] tracking-tightest [overflow-wrap:anywhere] md:text-5xl">{r.title}</h1>
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted">
                 <span className="inline-flex items-center gap-1 text-text/80">
                   {biz.name}
@@ -174,7 +174,7 @@ function ResourceDetailView({
       {/* Mobile: sticky price bar + bottom sheet (same form instance). */}
       {!desktop && (
         <>
-          <div className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-card/95 px-4 py-3 backdrop-blur-md">
+          <div className="fixed inset-x-0 bottom-above-tabbar z-30 border-t border-border bg-card/95 px-4 py-3 backdrop-blur-md md:bottom-0">
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-[11px] text-muted">Estimated total</p>
@@ -193,7 +193,7 @@ function ResourceDetailView({
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   exit={{ opacity: 0 }}
-                  className="fixed inset-0 z-40 bg-ink/30"
+                  className="fixed inset-0 z-[60] bg-ink/30"
                   onClick={() => setSheetOpen(false)}
                   aria-hidden
                 />
@@ -206,7 +206,7 @@ function ResourceDetailView({
                   animate={{ y: 0 }}
                   exit={{ y: "100%" }}
                   transition={{ type: "spring", stiffness: 320, damping: 34 }}
-                  className="fixed inset-x-0 bottom-0 z-50 max-h-[90vh] overflow-y-auto rounded-t-[22px] border-t border-border bg-card px-4 pb-8 pt-3 shadow-card-hover"
+                  className="fixed inset-x-0 bottom-0 z-[60] h-[100dvh] overflow-y-auto border-t border-border bg-card px-4 pt-3 shadow-card-hover md:h-auto md:max-h-[90vh] md:rounded-t-[22px] md:pb-8"
                   data-lenis-prevent
                 >
                   <div className="mb-2 flex justify-between">
@@ -216,7 +216,7 @@ function ResourceDetailView({
                     type="button"
                     onClick={() => setSheetOpen(false)}
                     aria-label="Close"
-                    className="absolute right-3 top-3 grid size-8 place-items-center rounded-full text-muted hover:bg-surface hover:text-text"
+                    className="absolute right-3 top-3 z-10 grid size-8 place-items-center rounded-full text-muted hover:bg-surface hover:text-text touch:size-11"
                   >
                     <X className="size-4" />
                   </button>

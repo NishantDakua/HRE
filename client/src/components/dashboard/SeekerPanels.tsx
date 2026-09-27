@@ -125,9 +125,9 @@ export function SavedSearches() {
               <li key={s.id}>
                 <Link to={`/discover?${s.query}`} className="group flex items-center justify-between gap-3 px-4 py-3.5 transition-colors hover:bg-paper/60">
                   <div className="min-w-0">
-                    <p className="flex items-center gap-2 text-sm font-medium text-text">
-                      <Bookmark className="size-3.5 text-primary" />
-                      {s.name}
+                    <p className="flex min-w-0 items-center gap-2 text-sm font-medium text-text">
+                      <Bookmark className="size-3.5 shrink-0 text-primary" />
+                      <span className="truncate">{s.name}</span>
                       {s.newMatches > 0 && (
                         <span className="rounded-full bg-available/10 px-1.5 py-0.5 font-mono text-[10px] text-available">{s.newMatches} new</span>
                       )}

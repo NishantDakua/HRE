@@ -1,6 +1,6 @@
 import { Router, type Request, type Response } from 'express';
 import { clerkClient, getAuth } from '@clerk/express';
-import { ContractError, ensureContracts, presentContract, quoteByNature, saveScan } from '../exchange/contracts.js';
+import { ContractError, ensureContracts, presentContract, quoteByNature, saveScan, syncBookingProgress } from '../exchange/contracts.js';
 import { markMissing, recordUnitPhoto, unitSummary, UnitError } from '../exchange/units.js';
 import { prisma } from './exchange.js';
 const router = Router();
@@ -138,6 +138,7 @@ router.post('/contracts/:id/approve', async (req, res) => {
     }
     await prisma.exchangeContract.update({ where: { id: contract.id }, data: { providerApprovedAt: new Date() } });
     await markMissing(prisma, contract.id, 'RETURN');
+    await syncBookingProgress(prisma, contract.bookingId);
   }
   res.json(await presentContract(prisma, contract.id, originOf(req), actor.id));
 });
@@ -166,6 +167,7 @@ router.post('/contracts/:id/sign', async (req, res) => {
       create: { contractId: contract.id, role, purpose, imageUrl },
       update: { imageUrl, signedAt: new Date(), role },
     });
+    if (purpose === 'DISPATCH') await syncBookingProgress(prisma, contract.bookingId);
   } catch (error) {
     if (error instanceof ContractError) return res.status(error.status).json({ error: error.message });
     throw error;
@@ -272,6 +274,9 @@ router.post('/contracts/:id/disputes/:disputeId/agree', async (req, res) => {
     where: { id: dispute.id },
     data: { ...data, status: next.seekerAgreed && next.providerAgreed ? 'AGREED' : 'OPEN' },
   });
+  if (next.seekerAgreed && next.providerAgreed && dispute.phase === 'RETURN') {
+    await syncBookingProgress(prisma, contract.bookingId);
+  }
   res.json(await presentContract(prisma, contract.id, originOf(req), actor.id));
 });
 

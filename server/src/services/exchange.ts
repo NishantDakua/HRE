@@ -326,7 +326,7 @@ export async function respondToBooking(id: string, input: RespondInput, business
   if (!row) return null;
   const actorId = businessId ?? (input.as === 'seeker' ? row.seekerId : row.items[0]?.providerId);
   if (!actorId || (row.seekerId !== actorId && !row.items.some((item) => item.providerId === actorId))) return null;
-  const next = input.action === 'accept' ? 'ACCEPTED' : input.action === 'reject' ? 'REJECTED' : 'COUNTERED';
+  const next = input.action === 'accept' ? 'CONFIRMED' : input.action === 'reject' ? 'REJECTED' : 'COUNTERED';
   const item = row.items[0];
   if (input.action === 'counter' && input.price !== undefined && item) {
     const asSeeker = actorId === row.seekerId;
@@ -360,6 +360,6 @@ export async function respondToBooking(id: string, input: RespondInput, business
     data: { status: next },
     include: bookingInclude,
   });
-  if (next === 'ACCEPTED') await ensureContracts(prisma, updated.id);
+  if (next === 'CONFIRMED') await ensureContracts(prisma, updated.id);
   return bookingDetail(updated);
 }

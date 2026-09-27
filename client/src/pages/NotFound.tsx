@@ -15,7 +15,7 @@ export default function NotFoundPage({ error = false }: { error?: boolean }) {
   return (
     <div className="container max-w-xl space-y-4 py-20">
       <p className="eyebrow text-primary">{error ? "Something broke" : "404"}</p>
-      <h1 className="text-4xl tracking-tightest">
+      <h1 className="text-[clamp(1.75rem,0.9rem+4vw,2.25rem)] tracking-tightest">
         {error ? (
           <>
             That didn&apos;t <em>work.</em>

@@ -2,7 +2,7 @@ import { Router, type Request, type Response } from 'express';
 import { clerkClient, getAuth } from '@clerk/express';
 import { PrismaClient, type ExchangeBusiness, type ExchangeListing, type ExchangeBooking, type ExchangeOffer, type ExchangeReview } from '@prisma/client';
 import { buildLiveReport, liveSummary, type LiveDeal } from '../exchange/report.js';
-import { ensureContracts } from '../exchange/contracts.js';
+import { ensureContracts, syncBookingProgress } from '../exchange/contracts.js';
 import { PhotoError, storeListingPhotos } from '../exchange/photos.js';
 import { ensureUnits, UnitError } from '../exchange/units.js';
 
@@ -176,6 +176,13 @@ function weightedTotal(score: Record<string, number>, urgent = false) {
 }
 
 async function bookingDetail(row: BookingRow, businesses?: Map<string, ExchangeBusiness>) {
+  const progress = await syncBookingProgress(prisma, row.id);
+  if (progress) {
+    row.status = progress.status;
+    for (const offer of row.offers) {
+      if (offer.status === 'OPEN') offer.status = 'ACCEPTED';
+    }
+  }
   const provider =
     businesses?.get(row.items[0]?.providerId ?? '') ??
     (await prisma.exchangeBusiness.findUnique({ where: { id: row.items[0]?.providerId ?? '' } })) ??
@@ -192,6 +199,9 @@ async function bookingDetail(row: BookingRow, businesses?: Map<string, ExchangeB
     createdAt: row.createdAt.toISOString(),
     urgent: row.urgent || undefined,
     note: row.note ?? undefined,
+    confirmedAt: progress?.confirmedAt ?? undefined,
+    dispatchedAt: progress?.dispatchedAt ?? undefined,
+    completedAt: progress?.completedAt ?? undefined,
     reviews: row.reviews.map((review) => ({
       byBusinessId: review.byBusinessId,
       rating: review.rating,
@@ -647,7 +657,7 @@ router.post('/bookings/:id/respond', async (req, res) => {
   });
   if (!row || !isParty(row, actor.id)) return res.status(404).json({ error: 'Booking not found' });
   const action = req.body?.action;
-  const next = action === 'accept' ? 'ACCEPTED' : action === 'reject' ? 'REJECTED' : 'COUNTERED';
+  const next = action === 'accept' ? 'CONFIRMED' : action === 'reject' ? 'REJECTED' : 'COUNTERED';
   const item = row.items[0];
   const asSeeker = actor.id === row.seekerId;
   if (action === 'counter' && req.body?.price !== undefined) {
@@ -681,7 +691,7 @@ router.post('/bookings/:id/respond', async (req, res) => {
     data: { status: next },
     include: bookingInclude,
   });
-  if (next === 'ACCEPTED') await ensureContracts(prisma, updated.id);
+  if (next === 'CONFIRMED') await ensureContracts(prisma, updated.id);
   res.json(await bookingDetail(updated));
 });
 

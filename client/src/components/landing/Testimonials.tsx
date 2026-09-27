@@ -76,7 +76,7 @@ export function Testimonials() {
       <div className="container">
         <Reveal className="max-w-2xl">
           <p className="eyebrow text-primary">From the exchange</p>
-          <h2 className="mt-4 text-4xl leading-[1.05] tracking-tightest text-ink md:text-6xl">
+          <h2 className="mt-4 text-[clamp(1.75rem,0.9rem+4vw,2.25rem)] leading-[1.05] tracking-tightest [overflow-wrap:anywhere] text-ink md:text-6xl">
             Mumbai, <em>sharing</em> notes.
           </h2>
         </Reveal>

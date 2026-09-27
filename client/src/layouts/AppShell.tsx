@@ -1,6 +1,7 @@
 import { Outlet, useMatch } from "react-router-dom";
-import { TopNav } from "@/components/shell/TopNav";
 import { ChatWidget } from "@/components/chat/ChatWidget";
+import { BottomTabBar } from "@/components/shell/BottomTabBar";
+import { TopNav } from "@/components/shell/TopNav";
 
 /** Nav + page frame. The landing page is full-bleed with a transparent nav over the hero. */
 export function AppShell() {
@@ -8,15 +9,16 @@ export function AppShell() {
   return (
     <>
       <TopNav transparent={isLanding} />
-      <main>
+      <main className="pb-tabbar md:pb-0">
         {isLanding ? (
           <Outlet />
         ) : (
-          <div className="container px-4 py-6 sm:px-6 sm:py-8 md:py-14">
+          <div className="container py-10 md:py-14">
             <Outlet />
           </div>
         )}
       </main>
+      <BottomTabBar />
       <ChatWidget />
     </>
   );

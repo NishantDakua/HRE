@@ -125,7 +125,7 @@ function RequestDetail({ id, mode, onBack }: { id: string; mode: Role; onBack: (
               <span className="font-mono text-[11px] text-muted">{b.ref}</span>
               <LiveBadge updatedAt={dataUpdatedAt} fetching={isFetching} />
             </div>
-            <h2 className="mt-2 text-2xl leading-tight tracking-tightest text-ink md:text-3xl">{b.title}</h2>
+            <h2 className="mt-2 text-2xl leading-tight tracking-tightest text-ink [overflow-wrap:anywhere] md:text-3xl">{b.title}</h2>
             <p className="mt-1 inline-flex flex-wrap items-center gap-x-2 text-sm text-muted">
               <span className="inline-flex items-center gap-1 text-text">
                 {mode === "seeker" ? "with" : "from"} {other.name}
@@ -229,7 +229,7 @@ export default function RequestsPage() {
     <div className="space-y-6">
       <header>
         <p className="eyebrow">{mode === "provider" ? "Incoming" : "Outgoing"} · Requests</p>
-        <h1 className="mt-2 text-4xl leading-[1.05] tracking-tightest md:text-5xl">
+        <h1 className="mt-2 text-[clamp(1.75rem,0.9rem+4vw,2.25rem)] leading-[1.05] tracking-tightest [overflow-wrap:anywhere] md:text-5xl">
           Every <em>deal</em>, in one thread.
         </h1>
       </header>
@@ -300,7 +300,7 @@ export default function RequestsPage() {
               )}
             </div>
           ) : (
-            <ul className="max-h-[calc(100vh-18rem)] space-y-1 overflow-y-auto pr-1 lg:sticky lg:top-24">
+            <ul className="space-y-1 lg:sticky lg:top-24 lg:max-h-[calc(100vh-18rem)] lg:overflow-y-auto lg:pr-1">
               <AnimatePresence initial={false}>
                 {list.map((b) => (
                   <RequestListItem key={b.id} b={b} mode={mode} active={b.id === selectedId} onSelect={() => update({ id: b.id })} />

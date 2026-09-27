@@ -190,7 +190,7 @@ export interface BookingLine extends BookingItem {
   listPrice: number;
 }
 
-/** Bookings as returned by the API: with seeker, resources and distance resolved. */
+  /** Bookings as returned by the API: with seeker, resources and distance resolved. */
 export interface BookingDetail extends Booking {
   seeker: Business;
   provider: Business;
@@ -199,6 +199,12 @@ export interface BookingDetail extends Booking {
   offers: NegotiationOffer[];
   /** Seeker → provider distance (km). */
   distanceKm: number;
+  /** When the provider accepted and the contract was created. */
+  confirmedAt?: string;
+  /** When the provider signed the dispatch copy. */
+  dispatchedAt?: string;
+  /** When the return was approved. */
+  completedAt?: string;
 }
 
 export interface NegotiationOffer {

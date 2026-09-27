@@ -109,7 +109,7 @@ export function CompareDock({ items, onRemove, onClear }: CompareDockProps) {
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 80, opacity: 0 }}
             transition={{ type: "spring", stiffness: 420, damping: 36 }}
-            className="fixed inset-x-4 bottom-5 z-40 mx-auto flex max-w-2xl items-center gap-2 rounded-full bg-ink p-2 pl-4 text-paper shadow-card-hover"
+            className="fixed inset-x-4 bottom-tabbar z-40 mx-auto flex max-w-2xl items-center gap-2 rounded-full bg-ink p-2 pl-4 text-paper shadow-card-hover md:bottom-5"
             role="region"
             aria-label="Compare tray"
           >
@@ -152,7 +152,7 @@ export function CompareDock({ items, onRemove, onClear }: CompareDockProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="fixed inset-0 z-50 bg-ink/30 backdrop-blur-[2px]"
+              className="fixed inset-0 z-[60] bg-ink/30 backdrop-blur-[2px]"
               onClick={() => setOpen(false)}
               aria-hidden
             />
@@ -165,7 +165,7 @@ export function CompareDock({ items, onRemove, onClear }: CompareDockProps) {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", stiffness: 320, damping: 34 }}
-              className="fixed inset-x-0 bottom-0 z-50 max-h-[85vh] overflow-auto rounded-t-[22px] border-t border-border bg-card shadow-card-hover"
+              className="fixed inset-x-0 bottom-0 z-[60] h-[100dvh] overflow-auto border-t border-border bg-card pb-[env(safe-area-inset-bottom)] shadow-card-hover md:h-auto md:max-h-[85vh] md:rounded-t-[22px]"
               data-lenis-prevent
             >
               <div className="container py-6">
@@ -184,7 +184,47 @@ export function CompareDock({ items, onRemove, onClear }: CompareDockProps) {
                   </button>
                 </div>
 
-                <div className="mt-6 overflow-x-auto">
+                <ul className="mt-5 space-y-3 md:hidden" aria-label="Compared listings">
+                  {items.map((r, i) => (
+                    <li key={r.resource.id} className="rounded-lg border border-border bg-paper/60 p-4">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="flex items-center gap-1 font-medium text-ink">
+                            <span className="truncate">{r.resource.business.name}</span>
+                            {r.resource.business.verified && <BadgeCheck className="size-3.5 shrink-0 text-primary" aria-label="Verified" />}
+                          </p>
+                          <p className="truncate text-xs text-muted">
+                            {r.resource.title} · {r.resource.business.area}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => onRemove(r.resource.id)}
+                          aria-label={`Remove ${r.resource.business.name}`}
+                          className="grid size-8 shrink-0 place-items-center rounded-full text-muted hover:bg-surface hover:text-text"
+                        >
+                          <X className="size-4" />
+                        </button>
+                      </div>
+                      <dl className="mt-3 divide-y divide-border text-sm">
+                        {LINES.map((line) => {
+                          const best = bestIndex(items, line) === i;
+                          return (
+                            <div key={line.label} className="flex items-baseline justify-between gap-3 py-2">
+                              <dt className="text-xs text-muted">{line.label}</dt>
+                              <dd className={cn("text-right font-mono tabular-nums text-text", best && "rounded bg-available/10 px-1.5 text-available")}>{line.render(r)}</dd>
+                            </div>
+                          );
+                        })}
+                      </dl>
+                      <Link to={`/resource/${r.resource.id}`} className="mt-2 inline-flex items-center gap-1 text-sm font-medium text-text underline-offset-4 hover:underline">
+                        View listing <ArrowUpRight className="size-3.5" />
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+
+                <div className="mt-6 hidden overflow-x-auto md:block">
                   <table className="w-full min-w-[560px] border-separate border-spacing-0 text-sm">
                     <thead>
                       <tr>

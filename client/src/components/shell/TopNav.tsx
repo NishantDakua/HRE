@@ -23,20 +23,20 @@ const ROLES: { value: Role; label: string }[] = [
 
 function Logo({ overHero }: { overHero: boolean }) {
   return (
-    <Link to="/" className="flex items-center gap-2.5" aria-label="Spare home">
+    <Link to="/" className="flex shrink-0 items-center gap-2.5" aria-label="Spare home">
       <span className="grid size-7 place-items-center rounded-[9px] border border-primary/40 bg-primary/10">
         <span className="font-display text-[15px] font-semibold leading-none text-primary">S</span>
       </span>
-      <span className={cn("font-display text-xl tracking-tight", overHero ? "text-[color:rgb(var(--hero-fg))]" : "text-text")}>Spare</span>
+      <span className={cn("font-display text-xl tracking-tight md:hidden lg:inline", overHero ? "text-[color:rgb(var(--hero-fg))]" : "text-text")}>Spare</span>
     </Link>
   );
 }
 
-function RoleSwitch() {
+export function RoleSwitch() {
   const role = useAppStore((s) => s.mode);
   const setRole = useAppStore((s) => s.setMode);
   return (
-    <div role="radiogroup" aria-label="Role" className="relative flex h-8 items-center rounded-full border border-border bg-surface p-0.5">
+    <div role="radiogroup" aria-label="Role" className="relative flex h-8 items-center rounded-full border border-border bg-surface p-0.5 touch:h-12">
       {ROLES.map((r) => {
         const active = role === r.value;
         return (
@@ -71,7 +71,7 @@ function NotificationBell() {
   return (
     <button
       aria-label={`Notifications, ${unread} unread`}
-      className="relative grid size-9 place-items-center rounded-full border border-border text-muted transition-colors hover:border-primary/40 hover:text-text"
+      className="relative grid size-9 place-items-center rounded-full border border-border text-muted transition-colors hover:border-primary/40 hover:text-text touch:size-11"
     >
       <Bell className="size-4" strokeWidth={1.75} />
       {unread > 0 && (
@@ -131,10 +131,10 @@ export function TopNav({ transparent = false }: { transparent?: boolean }) {
         clear ? "border-transparent bg-transparent" : "border-border bg-bg/85 backdrop-blur-md"
       )}
     >
-      <div className="container flex h-16 items-center gap-8">
+      <div className="container flex h-16 items-center gap-8 md:gap-3 lg:gap-8">
         <Logo overHero={clear} />
 
-        <nav className="hidden flex-1 items-center gap-1 md:flex">
+        <nav className="hidden min-w-0 flex-1 items-center gap-1 md:flex md:gap-0 lg:gap-1">
           {NAV.map((item) => {
             const active = isActive(item.href);
             return (
@@ -142,7 +142,7 @@ export function TopNav({ transparent = false }: { transparent?: boolean }) {
                 key={item.label}
                 to={item.href}
                 className={cn(
-                  "relative rounded-md px-3 py-2 text-sm transition-colors",
+                  "relative whitespace-nowrap rounded-md px-3 py-2 text-sm transition-colors md:px-2 lg:px-3",
                   clear
                     ? active
                       ? "text-[color:rgb(var(--hero-fg))]"
@@ -156,7 +156,7 @@ export function TopNav({ transparent = false }: { transparent?: boolean }) {
                 {active && (
                   <motion.span
                     layoutId="nav-underline"
-                    className="absolute inset-x-3 -bottom-[13px] h-px bg-primary"
+                    className="absolute inset-x-3 -bottom-[13px] h-px bg-primary md:inset-x-2 lg:inset-x-3"
                     transition={{ type: "spring", stiffness: 500, damping: 40 }}
                   />
                 )}
@@ -165,31 +165,14 @@ export function TopNav({ transparent = false }: { transparent?: boolean }) {
           })}
         </nav>
 
-        <div className="ml-auto flex items-center gap-3">
-          <RoleSwitch />
+        <div className="ml-auto flex shrink-0 items-center gap-3 md:gap-2 lg:gap-3">
+          <div className="hidden md:block">
+            <RoleSwitch />
+          </div>
           <NotificationBell />
           <NavAuth />
         </div>
       </div>
-
-      <nav className="container flex gap-1 overflow-x-auto pb-2 [scrollbar-width:none] md:hidden [&::-webkit-scrollbar]:hidden">
-        {NAV.map((item) => (
-          <Link
-            key={item.label}
-            to={item.href}
-            className={cn(
-              "shrink-0 rounded-full border px-3 py-1 text-xs",
-              isActive(item.href)
-                ? "border-primary/40 text-primary"
-                : clear
-                  ? "border-[color:rgb(var(--hero-fg)/0.2)] text-[color:rgb(var(--hero-fg)/0.7)]"
-                  : "border-border text-muted"
-            )}
-          >
-            {item.label}
-          </Link>
-        ))}
-      </nav>
     </header>
   );
 }

@@ -1,4 +1,4 @@
-import { useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { MATCH_SIGNALS, MATCH_WEIGHTS, URGENT_WEIGHTS } from "@/lib/match";
@@ -88,19 +88,56 @@ export function MatchScoreBar({
   const total = weighted ?? overallScore(score);
   const [open, setOpen] = useState(false);
   const tipId = useId();
+  const root = useRef<HTMLDivElement>(null);
+  const byTouch = useRef(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: PointerEvent) => {
+      if (!root.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("pointerdown", close);
+    return () => document.removeEventListener("pointerdown", close);
+  }, [open]);
+
   const interactive = breakdown
     ? {
         tabIndex: 0,
+        role: "button" as const,
+        "aria-expanded": open,
+        "aria-label": `Match ${total}%: show score breakdown`,
         "aria-describedby": open ? tipId : undefined,
-        onMouseEnter: () => setOpen(true),
-        onMouseLeave: () => setOpen(false),
-        onFocus: () => setOpen(true),
+        onPointerDown: (e: React.PointerEvent) => {
+          byTouch.current = e.pointerType !== "mouse";
+        },
+        onPointerEnter: (e: React.PointerEvent) => {
+          if (e.pointerType === "mouse") setOpen(true);
+        },
+        onPointerLeave: (e: React.PointerEvent) => {
+          if (e.pointerType === "mouse") setOpen(false);
+        },
+        onFocus: () => {
+          if (!byTouch.current) setOpen(true);
+        },
         onBlur: () => setOpen(false),
+        onClick: (e: React.MouseEvent) => {
+          if (!byTouch.current) return;
+          e.preventDefault();
+          e.stopPropagation();
+          setOpen((value) => !value);
+        },
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === "Escape") setOpen(false);
+          else if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            setOpen((value) => !value);
+          }
+        },
       }
     : {};
 
   return (
-    <div className={cn("relative w-full", breakdown && "cursor-help rounded-sm outline-offset-4", className)} {...interactive}>
+    <div ref={root} className={cn("relative w-full", breakdown && "cursor-help rounded-sm outline-offset-4 touch:py-3", className)} {...interactive}>
       <AnimatePresence>{breakdown && open && <Breakdown id={tipId} score={score} total={total} urgent={urgent} />}</AnimatePresence>
       {showTotal && (
         <div className="mb-2 flex items-baseline justify-between">

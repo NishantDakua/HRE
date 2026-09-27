@@ -37,7 +37,7 @@ function Row({ items, reverse = false, duration, outline = false }: { items: str
           <li key={`${item}-${i}`} className="flex items-center" aria-hidden={i >= items.length}>
             <span
               className={cn(
-                "whitespace-nowrap px-6 font-display text-5xl italic leading-none tracking-tight md:px-10 md:text-7xl",
+                "whitespace-nowrap px-6 font-display text-[clamp(2.25rem,1.2rem+5vw,3rem)] italic leading-none tracking-tight md:px-10 md:text-7xl",
                 outline ? "text-transparent [-webkit-text-stroke:1.5px_hsl(var(--ink))]" : "text-ink"
               )}
             >
