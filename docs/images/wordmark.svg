@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="72" viewBox="0 0 280 72" role="img" aria-label="Spare">
+  <rect width="280" height="72" rx="36" fill="#FBF4E8"/>
+  <rect x="8" y="8" width="56" height="56" rx="16" fill="#D9653B" fill-opacity="0.12" stroke="#D9653B" stroke-opacity="0.45"/>
+  <text x="36" y="46" text-anchor="middle" font-family="Georgia, serif" font-size="32" font-weight="600" fill="#D9653B">S</text>
+  <text x="80" y="46" font-family="Georgia, serif" font-size="32" fill="#2A1F1A">Spare</text>
+</svg>
