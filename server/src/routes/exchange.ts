@@ -69,7 +69,10 @@ async function dealsFor(businessId: string): Promise<LiveDeal[]> {
       offers: { orderBy: { round: 'asc' } },
     },
   });
-  const businesses = new Map((await prisma.exchangeBusiness.findMany()).map((business) => [business.id, business]));
+  const providerIds = [...new Set(rows.flatMap((row) => row.items.map((item) => item.providerId)))];
+  const businesses = new Map(
+    (await prisma.exchangeBusiness.findMany({ where: { id: { in: providerIds } } })).map((business) => [business.id, business])
+  );
   return rows.map((row) => ({
     createdAt: row.createdAt,
     startAt: row.startAt,
@@ -537,9 +540,28 @@ router.get('/bookings', async (req, res) => {
     include: bookingInclude,
     orderBy: { createdAt: 'desc' },
   });
+  const providerIds = [...new Set(rows.flatMap((row) => row.items.map((item) => item.providerId)))];
   const businesses = new Map(
-    (await prisma.exchangeBusiness.findMany()).map((business) => [business.id, business])
+    providerIds.length === 0
+      ? []
+      : (await prisma.exchangeBusiness.findMany({ where: { id: { in: providerIds } } })).map((business) => [business.id, business])
   );
+  if (req.query.summary === '1') {
+    res.json(
+      rows.map((row) => ({
+        id: row.id,
+        ref: row.ref,
+        title: row.title,
+        status: row.status,
+        startAt: row.startAt.toISOString(),
+        endAt: row.endAt.toISOString(),
+        total: row.total,
+        seeker: businessJson(row.seeker),
+        provider: businessJson(businesses.get(row.items[0]?.providerId ?? '') ?? row.seeker),
+      }))
+    );
+    return;
+  }
   res.json(await Promise.all(rows.map((row) => bookingDetail(row, businesses))));
 });
 

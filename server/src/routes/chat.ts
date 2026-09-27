@@ -41,7 +41,7 @@ router.post('/', async (req, res) => {
   } catch (error) {
     if (error instanceof LLMUnavailableError) {
       console.error('Local LLM error:', error.message);
-      send({ event: 'error', error: `${error.message}. Start it with: pnpm dev:ai` });
+      send({ event: 'error', error: error.message });
     } else {
       console.error('Chat error:', error);
       send({ event: 'error', error: 'Assistant failed' });

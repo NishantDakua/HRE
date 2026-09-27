@@ -267,8 +267,12 @@ export function ChatWidget() {
                 key={m.resourceId}
                 m={m}
                 disabled={busy}
-                onNavigate={closeOnMobile}
-                onBook={(o) => send(`Book ${o.title} (id ${o.resourceId}) — ${Math.min(o.fulfils, block.quantity)} ${o.unitLabel}.`)}
+                onNavigate={() => setOpen(false)}
+                onBook={(o) =>
+                  send(
+                    `Book ${o.title} (id ${o.resourceId}) — ${Math.min(o.fulfils, block.quantity)} ${o.unitLabel} from ${block.startAt} to ${block.endAt}.`,
+                  )
+                }
               />
             ))}
           </div>
@@ -323,7 +327,7 @@ export function ChatWidget() {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: "100%", opacity: 0.6 }}
             transition={{ type: "spring", stiffness: 380, damping: 38 }}
-            className="fixed inset-0 z-50 flex flex-col bg-card sm:inset-auto sm:bottom-5 sm:right-5 sm:h-[min(600px,calc(100dvh-2.5rem))] sm:w-[380px] sm:rounded-xl sm:border sm:border-border sm:shadow-card-hover"
+            className="fixed inset-0 z-[80] flex flex-col bg-card sm:inset-auto sm:bottom-5 sm:right-5 sm:h-[min(600px,calc(100dvh-2.5rem))] sm:w-[380px] sm:rounded-xl sm:border sm:border-border sm:shadow-card-hover"
           >
             <header className="flex items-center gap-2 border-b border-border px-4 py-3">
               <span className="grid size-8 place-items-center rounded-full bg-primary/15 text-primary">

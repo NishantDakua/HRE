@@ -18,8 +18,8 @@ import { findOrCreateHREUser } from '../middleware/auth.js';
 import { getCurrentWeather } from './digitalTwin/weatherService.js';
 import { runSimulation } from './digitalTwin/simulationService.js';
 
-const AI_SERVICE_URL = process.env.AI_SERVICE_URL ?? 'http://localhost:8008';
 const LLM_TIMEOUT_MS = 180_000;
+const NUGEN_CHAT_URL = 'https://api.nugen.in/api/v3/inference/chat/completions';
 const MAX_TOOL_ROUNDS = 6;
 const SESSION_TTL_MS = 2 * 60 * 60 * 1000;
 
@@ -88,6 +88,7 @@ interface Session {
   messages: LLMMessage[];
   pending: Map<string, PendingAction>;
   lastSeen: number;
+  lastSearch?: { quantity: number; startAt: string; endAt: string; matches: MatchCard[] };
 }
 
 const sessions = new Map<string, Session>();
@@ -112,7 +113,7 @@ export function getSession(id: string | undefined): { id: string; session: Sessi
 
 const SYSTEM_PROMPT = `You are the booking assistant inside Spare, a marketplace where hospitality businesses in Mumbai rent idle resources from each other: banquet space, chairs & tables, vehicles, kitchen capacity, AV equipment, parking, and linen & decor.
 
-The person chatting is a demo business. In seeker mode they are Carter Road Kitchen (a restaurant in Bandra) looking to rent things; in provider mode they are Marol Central Kitchen (a caterer in Andheri) handling requests for their listings. Each user message starts with a <context> tag giving the current time (Asia/Kolkata) and mode.
+The person chatting is the company that is signed in. Seeker mode means they want to rent. Provider mode means they are answering requests for their own listings. Never address them as Carter Road Kitchen, Marol Central Kitchen, or any other name you were not given. Each user message starts with a <context> tag giving the current time (Asia/Kolkata) and mode.
 
 How to help a seeker:
 - Work out what they need, how many, when (start and end), and where. If something essential is missing, ask a short follow-up question — one or two at a time, conversationally, not as a form. Budget and urgency are optional; ask only when they'd change the answer. Sensible assumptions are fine if you state them (e.g. "I'll assume 6–11 pm").
@@ -136,7 +137,10 @@ Rules for tools:
 - When the user taps Book on a card, their message names the listing and its id — reuse the time window and quantity from the search unless they say otherwise.
 - Resolve relative dates ("tomorrow", "this Saturday", "tonight") from the current time in <context>, and pass timestamps in local time like 2026-10-03T18:00.
 - If a tool returns an error, fix the input and try again, or ask the user.
-- When you call a tool, write at most one short sentence before it (or none).
+- When you call a tool, write at most one short sentence before it (or none). Put the call in this exact form and nothing else inside the tag:
+<tool_call>
+{"name":"search_resources","arguments":{"category":"CHAIRS_TABLES","quantity":150,"startAt":"2026-10-03T18:00","endAt":"2026-10-03T23:00","area":"Andheri"}}
+</tool_call>
 - Never show ids (resourceId, bookingId) to the user; refer to listings by name.
 
 Style: short, warm, practical. Always reply in English. Your replies may be read aloud, so avoid markdown tables, headings, and long bullet lists. Use ₹ for prices.`;
@@ -379,6 +383,7 @@ async function runTool(name: string, raw: unknown, session: Session, mode: Mode,
         const t = terms.find((row) => row.id === m.resourceId);
         return { ...m, minRentalHours: t?.minRentalHours, deposit: t?.deposit, cancellation: t?.cancellation };
       });
+      if (matches.length) session.lastSearch = { quantity: input.quantity, startAt: input.startAt, endAt: input.endAt, matches };
       return {
         content: matches.length ? JSON.stringify(forModel) : 'No available listings match. Suggest widening the area, time, or budget.',
         block: matches.length ? { type: 'options', quantity: input.quantity, startAt: input.startAt, endAt: input.endAt, matches } : undefined,
@@ -516,13 +521,152 @@ const TOOL_STATUS: Record<string, string> = {
   propose_booking: 'Preparing your request…',
   list_bookings: 'Checking your bookings…',
   propose_offer_response: 'Preparing your reply…',
+  get_current_weather: 'Checking the weather…',
+  run_weather_simulation: 'Running the weather simulation…',
 };
 
-/** One model pass. Visible text is forwarded as it's generated; a status line as soon as a tool call starts. */
-async function complete(messages: LLMMessage[], emit: Emit) {
+/** Qwen writes tool calls as tags inside the reply. Pull them out so the user never sees the JSON. */
+function toolCallsFromText(text: string): { content: string; toolCalls: LLMToolCall[] } {
+  const toolCalls: LLMToolCall[] = [];
+  const toolCallRe = /<tool_call>\s*([\s\S]*?)\s*<\/tool_call>/g;
+  for (const match of text.matchAll(toolCallRe)) {
+    try {
+      const call = JSON.parse(match[1]) as { name?: string; arguments?: unknown };
+      if (!call.name) continue;
+      const args = typeof call.arguments === 'string' ? parseToolArguments(call.arguments) : call.arguments;
+      toolCalls.push({
+        name: call.name,
+        arguments: args && typeof args === 'object' && !Array.isArray(args) ? (args as Record<string, unknown>) : {},
+      });
+    } catch {
+      // A half-written tag is dropped with the rest of the markup.
+    }
+  }
+  toolCallRe.lastIndex = 0;
+  const content = text.replace(toolCallRe, '').split('<tool_call>')[0].trim();
+  return { content, toolCalls };
+}
+
+function nugenAuth(): { key: string; model: string } | null {
+  const key = process.env.NUGEN_API_KEY?.trim();
+  const model = process.env.NUGEN_MODEL_ID?.trim();
+  if (!key || !model) return null;
+  return { key, model };
+}
+
+function parseToolArguments(raw: string): Record<string, unknown> {
+  if (!raw.trim()) return {};
+  try {
+    const value = JSON.parse(raw) as unknown;
+    return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+/** OpenAI-style history. Tool-call ids are assigned in order so each tool result lines up with its call. */
+function toNugenMessages(messages: LLMMessage[]) {
+  const out: object[] = [{ role: 'system', content: SYSTEM_PROMPT }];
+  let pendingIds: string[] = [];
+  for (const message of messages) {
+    if (message.role === 'assistant' && message.tool_calls?.length) {
+      pendingIds = message.tool_calls.map(() => `call_${randomUUID()}`);
+      out.push({
+        role: 'assistant',
+        content: message.content || '',
+        tool_calls: message.tool_calls.map((call, index) => ({
+          id: pendingIds[index],
+          type: 'function',
+          function: { name: call.name, arguments: JSON.stringify(call.arguments) },
+        })),
+      });
+    } else if (message.role === 'tool') {
+      out.push({ role: 'tool', tool_call_id: pendingIds.shift() ?? `call_${randomUUID()}`, content: message.content });
+    } else {
+      out.push({ role: message.role, content: message.content });
+    }
+  }
+  return out;
+}
+
+/** One Nugen pass. Text is forwarded as it streams. Tool calls are assembled from the stream and run by the caller. */
+async function completeWithNugen(messages: LLMMessage[], emit: Emit, auth: { key: string; model: string }) {
   let res: globalThis.Response;
   try {
-    res = await fetch(`${AI_SERVICE_URL}/llm/chat/stream`, {
+    res = await fetch(NUGEN_CHAT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${auth.key}` },
+      body: JSON.stringify({
+        model: auth.model,
+        messages: toNugenMessages(messages),
+        tools: TOOLS,
+        temperature: 0.3,
+        max_tokens: 800,
+        stream: true,
+      }),
+      signal: AbortSignal.timeout(LLM_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new LLMUnavailableError(error instanceof Error && error.name === 'TimeoutError' ? 'Nugen took too long to reply' : 'Nugen could not be reached');
+  }
+  if (!res.ok || !res.body) throw new LLMUnavailableError(`Nugen failed (${res.status}): ${(await res.text()).slice(0, 200)}`);
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+  let content = '';
+  const toolCalls = new Map<number, { name: string; arguments: string; announced: boolean }>();
+  const take = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith('data:')) return false;
+    const payload = trimmed.slice(5).trim();
+    if (payload === '[DONE]') return true;
+    const chunk = JSON.parse(payload) as {
+      choices?: { delta?: { content?: string | null; tool_calls?: { index: number; function?: { name?: string; arguments?: string } }[] }; finish_reason?: string | null }[];
+    };
+    const choice = chunk.choices?.[0];
+    const text = choice?.delta?.content;
+    if (text) content += text;
+    for (const call of choice?.delta?.tool_calls ?? []) {
+      const current = toolCalls.get(call.index) ?? { name: '', arguments: '', announced: false };
+      if (call.function?.name) current.name = call.function.name;
+      if (call.function?.arguments) current.arguments += call.function.arguments;
+      if (current.name && !current.announced) {
+        current.announced = true;
+        emit({ event: 'status', text: TOOL_STATUS[current.name] ?? 'Working on it…' });
+      }
+      toolCalls.set(call.index, current);
+    }
+    return false;
+  };
+  const finish = () => {
+    const native = [...toolCalls.values()]
+      .filter((call) => call.name)
+      .map((call) => ({ name: call.name, arguments: parseToolArguments(call.arguments) }));
+    const written = toolCallsFromText(content);
+    const calls = native.length ? native : written.toolCalls;
+    if (!calls.length && written.content) emit({ event: 'delta', text: written.content });
+    return { content: written.content, toolCalls: calls };
+  };
+
+  for await (const chunk of res.body) {
+    buffer += decoder.decode(chunk as Uint8Array, { stream: true });
+    let newline: number;
+    while ((newline = buffer.indexOf('\n')) >= 0) {
+      const done = take(buffer.slice(0, newline));
+      buffer = buffer.slice(newline + 1);
+      if (done) return finish();
+    }
+  }
+  if (buffer.trim()) take(buffer);
+  return finish();
+}
+
+/** One local-model pass. Visible text is forwarded as it's generated; a status line as soon as a tool call starts. */
+async function completeLocally(messages: LLMMessage[], emit: Emit) {
+  const aiUrl = process.env.AI_SERVICE_URL ?? 'http://localhost:8008';
+  let res: globalThis.Response;
+  try {
+    res = await fetch(`${aiUrl}/llm/chat/stream`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ messages: [{ role: 'system', content: SYSTEM_PROMPT }, ...messages], tools: TOOLS }),
@@ -552,9 +696,142 @@ async function complete(messages: LLMMessage[], emit: Emit) {
   throw new LLMUnavailableError('The local model stopped mid-reply');
 }
 
+async function complete(messages: LLMMessage[], emit: Emit) {
+  const nugen = nugenAuth();
+  if (nugen) return completeWithNugen(messages, emit, nugen);
+  return completeLocally(messages, emit);
+}
+
 function contextTag(mode: Mode) {
   const now = new Intl.DateTimeFormat('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'full', timeStyle: 'short' }).format(new Date());
   return `<context>now: ${now} (Asia/Kolkata, +05:30); mode: ${mode}</context>`;
+}
+
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'] as const;
+const CATEGORY_WORDS: [string, (typeof CATEGORIES)[number]][] = [
+  ['chair', 'CHAIRS_TABLES'],
+  ['table', 'CHAIRS_TABLES'],
+  ['banquet', 'BANQUET_SPACE'],
+  ['hall', 'BANQUET_SPACE'],
+  ['venue', 'BANQUET_SPACE'],
+  ['van', 'VEHICLES'],
+  ['vehicle', 'VEHICLES'],
+  ['bus', 'VEHICLES'],
+  ['kitchen', 'KITCHEN'],
+  ['cater', 'KITCHEN'],
+  ['projector', 'AV_EQUIPMENT'],
+  ['speaker', 'AV_EQUIPMENT'],
+  ['microphone', 'AV_EQUIPMENT'],
+  ['parking', 'PARKING'],
+  ['linen', 'LINEN_DECOR'],
+  ['decor', 'LINEN_DECOR'],
+];
+
+function istToday() {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Kolkata', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' })
+      .formatToParts(new Date())
+      .map((part) => [part.type, part.value]),
+  );
+  const weekday = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(parts.weekday);
+  return { year: Number(parts.year), month: Number(parts.month), day: Number(parts.day), weekday };
+}
+
+function addDays(year: number, month: number, day: number, days: number) {
+  const date = new Date(Date.UTC(year, month - 1, day + days));
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() };
+}
+
+function clockMinutes(hourRaw: string, minuteRaw: string | undefined, mer: string | undefined, fallbackMer?: string) {
+  let hour = Number(hourRaw);
+  const minute = minuteRaw ? Number(minuteRaw) : 0;
+  const marker = (mer ?? fallbackMer)?.toLowerCase().replace(/\./g, '');
+  if (marker === 'pm' && hour < 12) hour += 12;
+  if (marker === 'am' && hour === 12) hour = 0;
+  if (!marker && hour < 12) hour += 12;
+  if (hour > 23 || minute > 59) return null;
+  return hour * 60 + minute;
+}
+
+function resolveDay(text: string) {
+  const today = istToday();
+  if (/\btomorrow\b/.test(text)) return addDays(today.year, today.month, today.day, 1);
+  if (/\b(today|tonight)\b/.test(text)) return { year: today.year, month: today.month, day: today.day };
+  for (let index = 0; index < WEEKDAYS.length; index++) {
+    if (text.includes(WEEKDAYS[index])) {
+      const delta = (index - today.weekday + 7) % 7;
+      return addDays(today.year, today.month, today.day, delta);
+    }
+  }
+  return null;
+}
+
+/** The 0.5B model often answers in prose instead of a tool call. A complete request still runs the tool. */
+function planTurn(text: string, mode: Mode, session: Session): LLMToolCall | null {
+  const lower = text.toLowerCase();
+  // The Book button sends this. Match it before category words, or "Golden Chairs" is treated as a new search.
+  const direct = text.match(/^Book\s+.+\(id\s+([^)\s]+)\)\s+[—–-]\s+(\d+)\b(?:.*?from\s+(\S+)\s+to\s+(\S+))?/i);
+  if (direct) {
+    const startAt = direct[3] ?? session.lastSearch?.startAt;
+    const endAt = direct[4]?.replace(/[.,]+$/, '') ?? session.lastSearch?.endAt;
+    if (startAt && endAt) {
+      return {
+        name: 'propose_booking',
+        arguments: { resourceId: direct[1], quantity: Number(direct[2]), startAt, endAt },
+      };
+    }
+  }
+
+  const category = CATEGORY_WORDS.find(([word]) => lower.includes(word))?.[1];
+  const range = text.match(/(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?\s*(?:–|—|-|to)\s*(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)?/i);
+  if (category && range) {
+    const start = clockMinutes(range[1], range[2], range[3], range[6]);
+    const end = clockMinutes(range[4], range[5], range[6], range[3]);
+    const day = resolveDay(lower);
+    const quantity = text.replace(range[0], ' ').match(/\b(\d{1,4})\b/);
+    if (start != null && end != null && end > start && day && quantity) {
+      const area = AREAS.find((name) => lower.includes(name.toLowerCase()));
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const at = (minutes: number) => `${day.year}-${pad(day.month)}-${pad(day.day)}T${pad(Math.floor(minutes / 60))}:${pad(minutes % 60)}`;
+      return {
+        name: 'search_resources',
+        arguments: { category, quantity: Number(quantity[1]), startAt: at(start), endAt: at(end), ...(area ? { area } : {}) },
+      };
+    }
+  }
+
+  const saved = session.lastSearch;
+  if (saved && /\b(book|yes|take it|that one|the first|first one)\b/i.test(text) && !category) {
+    const named = saved.matches.find((match) => lower.includes(match.title.toLowerCase()) || lower.includes(match.provider.toLowerCase()));
+    const pick = named ?? saved.matches[0];
+    return {
+      name: 'propose_booking',
+      arguments: { resourceId: pick.resourceId, quantity: saved.quantity, startAt: saved.startAt, endAt: saved.endAt },
+    };
+  }
+
+  if (/\b(my bookings|my requests|show (?:my )?(?:bookings|requests)|incoming requests|pending requests)\b/i.test(text)) {
+    return { name: 'list_bookings', arguments: { role: /\bincoming\b/i.test(text) ? 'provider' : mode } };
+  }
+
+  const city = Object.keys(WEATHER_CITIES).find((name) => lower.includes(name));
+  if (/\b(what if|if it rains|storm|heavy rain)\b/.test(lower)) {
+    return { name: 'run_weather_simulation', arguments: { location: city ?? 'mumbai', rainfall: 80, temperature: 28, windSpeed: 30 } };
+  }
+  if (/\bweather\b/.test(lower)) return { name: 'get_current_weather', arguments: { location: city ?? 'mumbai' } };
+  return null;
+}
+
+function searchSentence(block: Extract<UIBlock, { type: 'options' }>) {
+  const best = block.matches[0];
+  const extra = block.matches.length - 1;
+  const more = extra > 0 ? ` ${extra} more ${extra === 1 ? 'option is' : 'options are'} on the cards.` : '';
+  return `${best.title} from ${best.provider} in ${best.area} is the closest fit for ${block.quantity}. About ${inr(best.landed)} landed.${more} Tap Book on a card, or tell me what to change.`;
+}
+
+function replyMissedTheRequest(text: string) {
+  const lower = text.toLowerCase();
+  return !lower.trim() || lower.includes('how many') || lower.includes('marol') || lower.includes('carter road');
 }
 
 // Tools whose confirm card says everything; a second model pass would only add "tap Confirm".
@@ -566,8 +843,12 @@ export async function chat(session: Session, userText: string, mode: Mode, emit:
   session.messages.push({ role: 'user', content: `${contextTag(mode)}\n${userText}` });
 
   try {
+    let shownSearch: Extract<UIBlock, { type: 'options' }> | undefined;
     for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-      const reply = await complete(session.messages, emit);
+      const planned = round === 0 ? planTurn(userText, mode, session) : null;
+      if (planned) emit({ event: 'status', text: TOOL_STATUS[planned.name] ?? 'Working on it…' });
+      const reply = planned ? { content: '', toolCalls: [planned] } : await complete(session.messages, emit);
+      if (shownSearch && reply.toolCalls.length === 0 && replyMissedTheRequest(reply.content)) reply.content = searchSentence(shownSearch);
       session.messages.push({
         role: 'assistant',
         content: reply.content,
@@ -588,13 +869,23 @@ export async function chat(session: Session, userText: string, mode: Mode, emit:
           };
           if (!(error instanceof z.ZodError)) console.error(`Assistant tool ${call.name} failed:`, error);
         }
-        if (outcome.block) emit({ event: 'block', block: outcome.block });
+        if (outcome.block) {
+          emit({ event: 'block', block: outcome.block });
+          if (outcome.block.type === 'options') shownSearch = outcome.block;
+        }
         if (outcome.isError || !CARD_ONLY_TOOLS.has(call.name)) allCardsShown = false;
         session.messages.push({ role: 'tool', content: outcome.isError ? `Error: ${outcome.content}` : outcome.content });
       }
       if (allCardsShown) {
         session.messages.push({ role: 'assistant', content: CARD_ONLY_REPLY });
         emit({ event: 'block', block: { type: 'text', text: CARD_ONLY_REPLY } });
+        return;
+      }
+      // Cards are already on screen. Don't wait on another model pass before Book can be clicked.
+      if (planned?.name === 'search_resources') {
+        const sentence = shownSearch ? searchSentence(shownSearch) : 'Nothing is free for that window. Try another area or a different time.';
+        session.messages.push({ role: 'assistant', content: sentence });
+        emit({ event: 'block', block: { type: 'text', text: sentence } });
         return;
       }
     }
